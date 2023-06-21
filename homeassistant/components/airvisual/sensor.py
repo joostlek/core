@@ -40,7 +40,6 @@ SENSOR_KIND_POLLUTANT = "main_pollutant"
 GEOGRAPHY_SENSOR_DESCRIPTIONS = (
     SensorEntityDescription(
         key=SENSOR_KIND_LEVEL,
-        name="Air pollution level",
         icon="mdi:gauge",
         device_class=SensorDeviceClass.ENUM,
         options=[
@@ -55,13 +54,11 @@ GEOGRAPHY_SENSOR_DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key=SENSOR_KIND_AQI,
-        name="Air quality index",
         device_class=SensorDeviceClass.AQI,
         state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(
         key=SENSOR_KIND_POLLUTANT,
-        name="Main pollutant",
         icon="mdi:chemical-weapon",
         device_class=SensorDeviceClass.ENUM,
         options=["co", "n2", "o3", "p1", "p2", "s2"],
