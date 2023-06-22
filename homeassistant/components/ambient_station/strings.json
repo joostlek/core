@@ -16,5 +16,54 @@
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_service%]"
     }
+  },
+  "entity": {
+    "sensor": {
+      "24_hour_rain": {
+        "name": "Rain 24 hours"
+      },
+      "aqi_pm25": {
+        "name": "AQI PM2.5"
+      },
+      "aqi_pm25_24h_avg": {
+        "name": "AQI PM2.5 24h average"
+      },
+      "aqi_pm25_indoor": {
+        "name": "AQI PM2.5 indoor"
+      },
+      "aqi_pm25_24h_avg_indoor": {
+        "name": "AQI PM2.5 indoor 24h average"
+      },
+      "absolute_pressure": {
+        "name": "Absolute pressure"
+      },
+      "relative_pressure": {
+        "name": "Relative pressure"
+      },
+      "daily_rain": {
+        "name": "Daily rain"
+      },
+      "dew_point": {
+        "name": "Dew point"
+      },
+      "event_rain": {
+        "name": "Event rain"
+      },
+      "feels_like": {
+        "name": "Feels like"
+      },
+      "hourly_rain_rate": {
+        "name": "Hourly rain rate"
+      },
+      "dew_point": {
+        "name": "Dew point"
+      },
+      "event_rain": {
+        "name": "Event rain"
+      },
+      "feels_like": {
+        "name": "Feels like"
+      }
+    }
   }
 }
