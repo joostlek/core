@@ -147,6 +147,7 @@ class HiveEntity(Entity):
     """Initiate Hive Base Class."""
 
     _attr_name = None
+    _attr_has_entity_name = True
 
     def __init__(self, hive: Hive, hive_device: dict[str, Any]) -> None:
         """Initialize the instance."""
