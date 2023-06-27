@@ -146,17 +146,18 @@ def refresh_system(
 class HiveEntity(Entity):
     """Initiate Hive Base Class."""
 
+    _attr_name = None
+
     def __init__(self, hive: Hive, hive_device: dict[str, Any]) -> None:
         """Initialize the instance."""
         self.hive = hive
         self.device = hive_device
-        self._attr_name = self.device["haName"]
         self._attr_unique_id = f'{self.device["hiveID"]}-{self.device["hiveType"]}'
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self.device["device_id"])},
             model=self.device["deviceData"]["model"],
             manufacturer=self.device["deviceData"]["manufacturer"],
-            name=self.device["device_name"],
+            name=self.device["haName"],
             sw_version=self.device["deviceData"]["version"],
             via_device=(DOMAIN, self.device["parentDevice"]),
         )

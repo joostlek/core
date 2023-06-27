@@ -19,7 +19,8 @@ SCAN_INTERVAL = timedelta(seconds=15)
 
 BINARY_SENSOR_TYPES: tuple[BinarySensorEntityDescription, ...] = (
     BinarySensorEntityDescription(
-        key="contactsensor", device_class=BinarySensorDeviceClass.OPENING
+        key="contactsensor",
+        device_class=BinarySensorDeviceClass.OPENING,
     ),
     BinarySensorEntityDescription(
         key="motionsensor",
