@@ -116,17 +116,14 @@ class GreeClimateEntity(CoordinatorEntity[DeviceDataUpdateCoordinator], ClimateE
         | ClimateEntityFeature.PRESET_MODE
         | ClimateEntityFeature.SWING_MODE
     )
+    _attr_has_entity_name = True
+    _attr_name = None
 
     def __init__(self, coordinator: DeviceDataUpdateCoordinator) -> None:
         """Initialize the Gree device."""
         super().__init__(coordinator)
         self._name = coordinator.device.device_info.name
         self._mac = coordinator.device.device_info.mac
-
-    @property
-    def name(self) -> str:
-        """Return the name of the device."""
-        return self._name
 
     @property
     def unique_id(self) -> str:
