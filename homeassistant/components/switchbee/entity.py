@@ -21,6 +21,7 @@ class SwitchBeeEntity(CoordinatorEntity[SwitchBeeCoordinator], Generic[_DeviceTy
     """Representation of a Switchbee entity."""
 
     _attr_has_entity_name = True
+    _attr_name = None
 
     def __init__(
         self,
@@ -30,7 +31,6 @@ class SwitchBeeEntity(CoordinatorEntity[SwitchBeeCoordinator], Generic[_DeviceTy
         """Initialize the Switchbee entity."""
         super().__init__(coordinator)
         self._device = device
-        self._attr_name = device.name
         self._attr_unique_id = f"{coordinator.unique_id}-{device.id}"
 
 
