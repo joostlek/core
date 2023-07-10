@@ -133,6 +133,8 @@ class ControllerDevice(ClimateEntity):
     _attr_precision = PRECISION_TENTHS
     _attr_should_poll = False
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_has_entity_name = True
+    _attr_name = None
 
     def __init__(self, controller: Controller) -> None:
         """Initialise ControllerDevice."""
@@ -169,7 +171,7 @@ class ControllerDevice(ClimateEntity):
             identifiers={(IZONE, self.unique_id)},
             manufacturer="IZone",
             model=self._controller.sys_type,
-            name=self.name,
+            name=f"iZone Controller {self._controller.device_uid}",
         )
 
         # Create the zones
@@ -255,11 +257,6 @@ class ControllerDevice(ClimateEntity):
     def unique_id(self) -> str:
         """Return the ID of the controller device."""
         return self._controller.device_uid
-
-    @property
-    def name(self) -> str:
-        """Return the name of the entity."""
-        return f"iZone Controller {self._controller.device_uid}"
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any]:
@@ -445,6 +442,8 @@ class ZoneDevice(ClimateEntity):
     _attr_precision = PRECISION_TENTHS
     _attr_should_poll = False
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_has_entity_name = True
+    _attr_name = None
 
     def __init__(self, controller: ControllerDevice, zone: Zone) -> None:
         """Initialise ZoneDevice."""
@@ -471,7 +470,7 @@ class ZoneDevice(ClimateEntity):
             },
             manufacturer="IZone",
             model=zone.type.name.title(),
-            name=self.name,
+            name=self._name,
             via_device=(IZONE, controller.unique_id),
         )
 
