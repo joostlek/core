@@ -11,7 +11,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.config_entry_oauth2_flow import AbstractOAuth2FlowHandler
 
-from .const import CONF_AGREEMENT, CONF_AGREEMENT_ID, CONF_MIGRATE, DOMAIN
+from .const import CONF_AGREEMENT, CONF_AGREEMENT_ID, DOMAIN
 
 
 class ToonFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
@@ -52,13 +52,10 @@ class ToonFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
         """Start a configuration flow based on imported data.
 
         This step is merely here to trigger "discovery" when the `toon`
-        integration is listed in the user configuration, or when migrating from
-        the version 1 schema.
+        integration is listed in the user configuration.
         """
 
-        if config is not None and CONF_MIGRATE in config:
-            self.context.update({CONF_MIGRATE: config[CONF_MIGRATE]})
-        else:
+        if config is not None:
             await self._async_handle_discovery_without_unique_id()
 
         return await self.async_step_user()
@@ -87,9 +84,6 @@ class ToonFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
         return await self._create_entry(self.agreements[agreement_index])
 
     async def _create_entry(self, agreement: Agreement) -> FlowResult:
-        if CONF_MIGRATE in self.context:
-            await self.hass.config_entries.async_remove(self.context[CONF_MIGRATE])
-
         await self.async_set_unique_id(agreement.agreement_id)
         self._abort_if_unique_id_configured()
 
