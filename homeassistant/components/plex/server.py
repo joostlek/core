@@ -620,6 +620,10 @@ class PlexServer:
         """Fetch item from Plex server."""
         return self._plex_server.fetchItem(item)
 
+    def check_updates(self) -> plexapi.server.Release | None:
+        """Return the latest release."""
+        return self._plex_server.checkForUpdate()
+
     def lookup_media(self, media_type, **kwargs):
         """Lookup a piece of media."""
         media_type = media_type.lower()
