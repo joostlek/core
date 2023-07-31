@@ -28,9 +28,10 @@ from .coordinator import (
     RadarrDataUpdateCoordinator,
     StatusDataUpdateCoordinator,
     T,
+    UpdateDataUpdateCoordinator,
 )
 
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.UPDATE]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -49,6 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "disk_space": DiskSpaceDataUpdateCoordinator(hass, host_configuration, radarr),
         "health": HealthDataUpdateCoordinator(hass, host_configuration, radarr),
         "movie": MoviesDataUpdateCoordinator(hass, host_configuration, radarr),
+        "update": UpdateDataUpdateCoordinator(hass, host_configuration, radarr),
     }
     for coordinator in coordinators.values():
         await coordinator.async_config_entry_first_refresh()

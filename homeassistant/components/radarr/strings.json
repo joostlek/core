@@ -48,6 +48,11 @@
       "start_time": {
         "name": "Start time"
       }
+    },
+    "update": {
+      "update": {
+        "name": "[%key:component::update::title%]"
+      }
     }
   }
 }
