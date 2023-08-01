@@ -4,9 +4,35 @@
   "nextPageToken": "CAEQAA",
   "pageInfo": {
     "totalResults": 525,
-    "resultsPerPage": 1
+    "resultsPerPage": 2
   },
   "items": [
+    {
+      "kind": "youtube#subscription",
+      "etag": "z4E2K7H9rHqfrTCRuk8TGriJmrw",
+      "id": "l6YW-siEBx2rtBlTJ_ip1123K0SlP2Mpc677EjVvWSg",
+      "snippet": {
+        "publishedAt": "2023-08-01T13:31:27.653827Z",
+        "title": "Google for Developers",
+        "description": "Subscribe to join a community of creative developers and learn the latest in Google technology — from AI and cloud, to mobile and web.\n\nExplore more at developers.google.com",
+        "resourceId": {
+          "kind": "youtube#channel",
+          "channelId": "UC_x5XG1OV2P6uZZ5FSM9Ttw"
+        },
+        "channelId": "UC_x5XG1OV2P6uZZ5FSM9Ttw",
+        "thumbnails": {
+          "default": {
+            "url": "https://yt3.ggpht.com/fca_HuJ99xUxflWdex0XViC3NfctBFreIl8y4i9z411asnGTWY-Ql3MeH_ybA4kNaOjY7kyA=s88-c-k-c0x00ffffff-no-rj"
+          },
+          "medium": {
+            "url": "https://yt3.ggpht.com/fca_HuJ99xUxflWdex0XViC3NfctBFreIl8y4i9z411asnGTWY-Ql3MeH_ybA4kNaOjY7kyA=s240-c-k-c0x00ffffff-no-rj"
+          },
+          "high": {
+            "url": "https://yt3.ggpht.com/fca_HuJ99xUxflWdex0XViC3NfctBFreIl8y4i9z411asnGTWY-Ql3MeH_ybA4kNaOjY7kyA=s800-c-k-c0x00ffffff-no-rj"
+          }
+        }
+      }
+    },
     {
       "kind": "youtube#subscription",
       "etag": "4Hr8w5f03mLak3fZID0aXypQRDg",
@@ -17,9 +43,9 @@
         "description": "Linus Tech Tips is a passionate team of \"professionally curious\" experts in consumer technology and video production who aim to educate and entertain.",
         "resourceId": {
           "kind": "youtube#channel",
-          "channelId": "UC_x5XG1OV2P6uZZ5FSM9Ttw"
+          "channelId": "UCXuqSBlHAE6Xw-yeJA0Tunw"
         },
-        "channelId": "UC_x5XG1OV2P6uZZ5FSM9Ttw",
+        "channelId": "UCXuqSBlHAE6Xw-yeJA0Tunw",
         "thumbnails": {
           "default": {
             "url": "https://yt3.ggpht.com/Vy6KL7EM_apxPSxF0pPy5w_c87YDTOlBQo3MADDF0Wl51kwxmt9wmRotnt2xQXwlrcyO0Xe56w=s88-c-k-c0x00ffffff-no-rj"

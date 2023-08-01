@@ -324,3 +324,52 @@ async def test_options_flow(
 
         assert result["type"] == FlowResultType.CREATE_ENTRY
         assert result["data"] == {CONF_CHANNELS: ["UC_x5XG1OV2P6uZZ5FSM9Ttw"]}
+
+
+async def test_changing_options_flow(
+    hass: HomeAssistant, setup_integration: ComponentSetup
+) -> None:
+    """Test the full options flow."""
+    await setup_integration()
+
+    state = hass.states.get("sensor.google_for_developers_latest_upload")
+    assert state is not None
+
+    state = hass.states.get("sensor.google_for_developers_subscribers")
+    assert state is not None
+
+    with patch(
+        "homeassistant.components.youtube.config_flow.YouTube",
+        return_value=MockYouTube(),
+    ):
+        entry = hass.config_entries.async_entries(DOMAIN)[0]
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "init"
+
+    with patch(
+        "homeassistant.components.youtube.api.YouTube",
+        return_value=MockYouTube(channel_fixture="youtube/get_channel_2.json"),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={CONF_CHANNELS: ["UCXuqSBlHAE6Xw-yeJA0Tunw"]},
+        )
+        await hass.async_block_till_done()
+
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        assert result["data"] == {CONF_CHANNELS: ["UCXuqSBlHAE6Xw-yeJA0Tunw"]}
+
+    state = hass.states.get("sensor.linus_tech_tips_latest_upload")
+    assert state is not None
+
+    state = hass.states.get("sensor.linus_tech_tips_subscribers")
+    assert state is not None
+
+    state = hass.states.get("sensor.google_for_developers_latest_upload")
+    assert state is None
+
+    state = hass.states.get("sensor.google_for_developers_subscribers")
+    assert state is None
