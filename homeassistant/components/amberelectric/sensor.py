@@ -64,13 +64,10 @@ class AmberSensor(CoordinatorEntity[AmberUpdateCoordinator], SensorEntity):
     ) -> None:
         """Initialize the Sensor."""
         super().__init__(coordinator)
-        self.site_id = coordinator.site_id
         self.entity_description = description
         self.channel_type = channel_type
 
-        self._attr_unique_id = (
-            f"{self.site_id}-{self.entity_description.key}-{self.channel_type}"
-        )
+        self._attr_unique_id = f"{coordinator.site_id}-{description.key}-{channel_type}"
 
 
 class AmberPriceSensor(AmberSensor):
@@ -192,7 +189,6 @@ class AmberGridSensor(CoordinatorEntity[AmberUpdateCoordinator], SensorEntity):
     ) -> None:
         """Initialize the Sensor."""
         super().__init__(coordinator)
-        self.site_id = coordinator.site_id
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.site_id}-{description.key}"
 

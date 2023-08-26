@@ -38,7 +38,6 @@ class AmberPriceGridSensor(
     ) -> None:
         """Initialize the Sensor."""
         super().__init__(coordinator)
-        self.site_id = coordinator.site_id
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.site_id}-{description.key}"
 
