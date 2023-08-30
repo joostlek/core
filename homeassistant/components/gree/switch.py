@@ -33,10 +33,6 @@ class GreeRequiredKeysMixin:
 class GreeSwitchEntityDescription(SwitchEntityDescription, GreeRequiredKeysMixin):
     """Describes Gree switch entity."""
 
-    # GreeSwitch does not support UNDEFINED or None,
-    # restrict the type to str.
-    name: str = ""
-
 
 def _set_light(device: Device, value: bool) -> None:
     """Typed helper to set device light property."""

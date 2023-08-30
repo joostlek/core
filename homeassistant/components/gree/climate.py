@@ -126,14 +126,14 @@ class GreeClimateEntity(CoordinatorEntity[DeviceDataUpdateCoordinator], ClimateE
     def __init__(self, coordinator: DeviceDataUpdateCoordinator) -> None:
         """Initialize the Gree device."""
         super().__init__(coordinator)
-        self._attr_name = coordinator.device.device_info.name
+        self._name = coordinator.device.device_info.name
         mac = coordinator.device.device_info.mac
         self._attr_unique_id = mac
         self._attr_device_info = DeviceInfo(
             connections={(CONNECTION_NETWORK_MAC, mac)},
             identifiers={(DOMAIN, mac)},
             manufacturer="Gree",
-            name=self._attr_name,
+            name=self._name,
         )
         units = self.coordinator.device.temperature_units
         if units == TemperatureUnits.C:
@@ -164,7 +164,7 @@ class GreeClimateEntity(CoordinatorEntity[DeviceDataUpdateCoordinator], ClimateE
         _LOGGER.debug(
             "Setting temperature to %d for %s",
             temperature,
-            self._attr_name,
+            self._name,
         )
 
         self.coordinator.device.target_temperature = round(temperature)
@@ -187,7 +187,7 @@ class GreeClimateEntity(CoordinatorEntity[DeviceDataUpdateCoordinator], ClimateE
         _LOGGER.debug(
             "Setting HVAC mode to %s for device %s",
             hvac_mode,
-            self._attr_name,
+            self._name,
         )
 
         if hvac_mode == HVACMode.OFF:
@@ -205,7 +205,7 @@ class GreeClimateEntity(CoordinatorEntity[DeviceDataUpdateCoordinator], ClimateE
 
     async def async_turn_on(self) -> None:
         """Turn on the device."""
-        _LOGGER.debug("Turning on HVAC for device %s", self._attr_name)
+        _LOGGER.debug("Turning on HVAC for device %s", self._name)
 
         self.coordinator.device.power = True
         await self.coordinator.push_state_update()
@@ -213,7 +213,7 @@ class GreeClimateEntity(CoordinatorEntity[DeviceDataUpdateCoordinator], ClimateE
 
     async def async_turn_off(self) -> None:
         """Turn off the device."""
-        _LOGGER.debug("Turning off HVAC for device %s", self._attr_name)
+        _LOGGER.debug("Turning off HVAC for device %s", self._name)
 
         self.coordinator.device.power = False
         await self.coordinator.push_state_update()
@@ -240,7 +240,7 @@ class GreeClimateEntity(CoordinatorEntity[DeviceDataUpdateCoordinator], ClimateE
         _LOGGER.debug(
             "Setting preset mode to %s for device %s",
             preset_mode,
-            self._attr_name,
+            self._name,
         )
 
         self.coordinator.device.steady_heat = False
@@ -297,7 +297,7 @@ class GreeClimateEntity(CoordinatorEntity[DeviceDataUpdateCoordinator], ClimateE
         _LOGGER.debug(
             "Setting swing mode to %s for device %s",
             swing_mode,
-            self._attr_name,
+            self._name,
         )
 
         self.coordinator.device.horizontal_swing = HorizontalSwing.Center
