@@ -12,7 +12,7 @@ import logging
 import math
 import sys
 from timeit import default_timer as timer
-from typing import TYPE_CHECKING, Any, Final, Literal, TypedDict, TypeVar, final
+from typing import TYPE_CHECKING, Any, Final, Literal, TypeVar, final
 
 import voluptuous as vol
 
@@ -34,18 +34,18 @@ from homeassistant.const import (
     STATE_UNKNOWN,
     EntityCategory,
 )
-from homeassistant.core import CALLBACK_TYPE, Context, Event, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, Context, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, NoEntitySpecifiedError
 from homeassistant.loader import bind_hass
 from homeassistant.util import dt as dt_util, ensure_unique_string, slugify
 
 from . import device_registry as dr, entity_registry as er
-from .device_registry import DeviceEntryType
+from .device_registry import DeviceInfo, EventDeviceRegistryUpdatedData
 from .event import (
     async_track_device_registry_updated_event,
     async_track_entity_registry_updated_event,
 )
-from .typing import UNDEFINED, StateType, UndefinedType
+from .typing import UNDEFINED, EventType, StateType, UndefinedType
 
 if TYPE_CHECKING:
     from .entity_platform import EntityPlatform
@@ -172,25 +172,6 @@ def get_unit_of_measurement(hass: HomeAssistant, entity_id: str) -> str | None:
         raise HomeAssistantError(f"Unknown entity {entity_id}")
 
     return entry.unit_of_measurement
-
-
-class DeviceInfo(TypedDict, total=False):
-    """Entity device information for device registry."""
-
-    configuration_url: str | None
-    connections: set[tuple[str, str]]
-    default_manufacturer: str
-    default_model: str
-    default_name: str
-    entry_type: DeviceEntryType | None
-    identifiers: set[tuple[str, str]]
-    manufacturer: str | None
-    model: str | None
-    name: str | None
-    suggested_area: str | None
-    sw_version: str | None
-    hw_version: str | None
-    via_device: tuple[str, str]
 
 
 ENTITY_CATEGORIES_SCHEMA: Final = vol.Coerce(EntityCategory)
@@ -775,30 +756,9 @@ class Entity(ABC):
         return f"{device_name} {name}" if device_name else name
 
     @callback
-    def _async_write_ha_state(self) -> None:
-        """Write the state to the state machine."""
-        if self._platform_state == EntityPlatformState.REMOVED:
-            # Polling returned after the entity has already been removed
-            return
-
-        hass = self.hass
-        entity_id = self.entity_id
+    def _async_generate_attributes(self) -> tuple[str, dict[str, Any]]:
+        """Calculate state string and attribute mapping."""
         entry = self.registry_entry
-
-        if entry and entry.disabled_by:
-            if not self._disabled_reported:
-                self._disabled_reported = True
-                _LOGGER.warning(
-                    (
-                        "Entity %s is incorrectly being triggered for updates while it"
-                        " is disabled. This is a bug in the %s integration"
-                    ),
-                    entity_id,
-                    self.platform.platform_name,
-                )
-            return
-
-        start = timer()
 
         attr = self.capability_attributes
         attr = dict(attr) if attr else {}
@@ -837,6 +797,33 @@ class Entity(ABC):
         if (supported_features := self.supported_features) is not None:
             attr[ATTR_SUPPORTED_FEATURES] = supported_features
 
+        return (state, attr)
+
+    @callback
+    def _async_write_ha_state(self) -> None:
+        """Write the state to the state machine."""
+        if self._platform_state == EntityPlatformState.REMOVED:
+            # Polling returned after the entity has already been removed
+            return
+
+        hass = self.hass
+        entity_id = self.entity_id
+
+        if (entry := self.registry_entry) and entry.disabled_by:
+            if not self._disabled_reported:
+                self._disabled_reported = True
+                _LOGGER.warning(
+                    (
+                        "Entity %s is incorrectly being triggered for updates while it"
+                        " is disabled. This is a bug in the %s integration"
+                    ),
+                    entity_id,
+                    self.platform.platform_name,
+                )
+            return
+
+        start = timer()
+        state, attr = self._async_generate_attributes()
         end = timer()
 
         if end - start > 0.4 and not self._slow_reported:
@@ -1097,7 +1084,9 @@ class Entity(ABC):
         if self.platform:
             self.hass.data[DATA_ENTITY_SOURCE].pop(self.entity_id)
 
-    async def _async_registry_updated(self, event: Event) -> None:
+    async def _async_registry_updated(
+        self, event: EventType[er.EventEntityRegistryUpdatedData]
+    ) -> None:
         """Handle entity registry update."""
         data = event.data
         if data["action"] == "remove":
@@ -1144,7 +1133,9 @@ class Entity(ABC):
         self._unsub_device_updates = None
 
     @callback
-    def _async_device_registry_updated(self, event: Event) -> None:
+    def _async_device_registry_updated(
+        self, event: EventType[EventDeviceRegistryUpdatedData]
+    ) -> None:
         """Handle device registry update."""
         data = event.data
 
