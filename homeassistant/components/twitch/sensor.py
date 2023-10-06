@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from twitchAPI.helper import first
 from twitchAPI.twitch import (
-    AuthType,
     Twitch,
     TwitchAPIException,
     TwitchResourceNotFound,
@@ -24,7 +23,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from .const import CONF_CHANNELS, DOMAIN, LOGGER, OAUTH_SCOPES
+from .const import CONF_CHANNELS, DOMAIN, LOGGER
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
@@ -111,6 +110,10 @@ async def async_setup_entry(
                 async for channel in client.get_users(logins=chunk)
             ]
         )
+    user = await first(client.get_users())
+    assert user
+    if user.id not in channels:
+        entities.append(TwitchSensor(user, client))
 
     async_add_entities(entities, True)
 
@@ -124,7 +127,6 @@ class TwitchSensor(SensorEntity):
         """Initialize the sensor."""
         self._client = client
         self._channel = channel
-        self._enable_user_auth = client.has_required_auth(AuthType.USER, OAUTH_SCOPES)
         self._attr_name = channel.display_name
         self._attr_unique_id = channel.id
 
@@ -135,8 +137,7 @@ class TwitchSensor(SensorEntity):
             ATTR_FOLLOWING: followers,
             ATTR_VIEWS: self._channel.view_count,
         }
-        if self._enable_user_auth:
-            await self._async_add_user_attributes()
+        await self._async_add_user_attributes()
         if stream := (
             await first(self._client.get_streams(user_id=[self._channel.id], first=1))
         ):
@@ -156,8 +157,8 @@ class TwitchSensor(SensorEntity):
             self._attr_entity_picture = self._channel.profile_image_url
 
     async def _async_add_user_attributes(self) -> None:
-        if not (user := await first(self._client.get_users())):
-            return
+        user = await first(self._client.get_users())
+        assert user
         self._attr_extra_state_attributes[ATTR_SUBSCRIPTION] = False
         try:
             sub = await self._client.check_user_subscription(

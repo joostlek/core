@@ -221,21 +221,6 @@ class TwitchInvalidTokenMock(TwitchMock):
         raise InvalidTokenException()
 
 
-class TwitchInvalidUserMock(TwitchMock):
-    """Twitch mock to test invalid user."""
-
-    async def get_users(
-        self, user_ids: list[str] | None = None, logins: list[str] | None = None
-    ) -> AsyncGenerator[TwitchUser, None]:
-        """Get list of mock users."""
-        if user_ids is not None or logins is not None:
-            async for user in super().get_users(user_ids, logins):
-                yield user
-        else:
-            for user in []:
-                yield user
-
-
 class TwitchAPIExceptionMock(TwitchMock):
     """Twitch mock to test when twitch api throws unknown exception."""
 

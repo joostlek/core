@@ -10,16 +10,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
 
-from ...common import MockConfigEntry
 from . import (
     TwitchAPIExceptionMock,
     TwitchInvalidTokenMock,
-    TwitchInvalidUserMock,
     TwitchMissingScopeMock,
     TwitchMock,
     TwitchUnauthorizedMock,
     setup_integration,
 )
+
+from tests.common import MockConfigEntry
 
 ENTITY_ID = "sensor.channel123"
 CONFIG = {
@@ -152,17 +152,6 @@ async def test_auth_invalid(
 
     sensor_state = hass.states.get(ENTITY_ID)
     assert sensor_state is None
-
-
-@pytest.mark.parametrize("twitch_mock", [TwitchInvalidUserMock()])
-async def test_auth_with_invalid_user(
-    hass: HomeAssistant, twitch: TwitchMock, config_entry: MockConfigEntry
-) -> None:
-    """Test auth with invalid user."""
-    await setup_integration(hass, config_entry)
-
-    sensor_state = hass.states.get(ENTITY_ID)
-    assert "subscribed" not in sensor_state.attributes
 
 
 @pytest.mark.parametrize("twitch_mock", [TwitchAPIExceptionMock()])
