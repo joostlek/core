@@ -24,11 +24,11 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize flow."""
-        self._ignore_cec = set()
-        self._known_hosts = set()
-        self._wanted_uuid = set()
+        self._ignore_cec: set[str] = set()
+        self._known_hosts: set[str] = set()
+        self._wanted_uuid: set[str] = set()
 
     @staticmethod
     @callback
@@ -38,7 +38,9 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Get the options flow for this handler."""
         return CastOptionsFlowHandler(config_entry)
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Handle a flow initialized by the user."""
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
@@ -56,7 +58,9 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         return await self.async_step_confirm()
 
-    async def async_step_config(self, user_input=None):
+    async def async_step_config(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Confirm the setup."""
         errors = {}
         data = {CONF_KNOWN_HOSTS: self._known_hosts}
@@ -83,7 +87,9 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="config", data_schema=vol.Schema(fields), errors=errors
         )
 
-    async def async_step_confirm(self, user_input=None):
+    async def async_step_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Confirm the setup."""
 
         data = self._get_data()
@@ -109,13 +115,17 @@ class CastOptionsFlowHandler(config_entries.OptionsFlow):
         self.config_entry = config_entry
         self.updated_config: dict[str, Any] = {}
 
-    async def async_step_init(self, user_input=None):
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Manage the Google Cast options."""
         return await self.async_step_basic_options()
 
-    async def async_step_basic_options(self, user_input=None):
+    async def async_step_basic_options(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Manage the Google Cast options."""
-        errors = {}
+        errors: dict[str, str] = {}
         current_config = self.config_entry.data
         if user_input is not None:
             bad_hosts, known_hosts = _string_to_list(
@@ -132,9 +142,9 @@ class CastOptionsFlowHandler(config_entries.OptionsFlow):
                 self.hass.config_entries.async_update_entry(
                     self.config_entry, data=self.updated_config
                 )
-                return self.async_create_entry(title="", data=None)
+                return self.async_create_entry(title="", data={})
 
-        fields = {}
+        fields: vol.Schema = {}
         suggested_value = _list_to_string(current_config.get(CONF_KNOWN_HOSTS))
         _add_with_suggestion(fields, CONF_KNOWN_HOSTS, suggested_value)
 
@@ -145,9 +155,11 @@ class CastOptionsFlowHandler(config_entries.OptionsFlow):
             last_step=not self.show_advanced_options,
         )
 
-    async def async_step_advanced_options(self, user_input=None):
+    async def async_step_advanced_options(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Manage the Google Cast options."""
-        errors = {}
+        errors: dict[str, str] = {}
         if user_input is not None:
             bad_cec, ignore_cec = _string_to_list(
                 user_input.get(CONF_IGNORE_CEC, ""), IGNORE_CEC_SCHEMA
@@ -162,9 +174,9 @@ class CastOptionsFlowHandler(config_entries.OptionsFlow):
                 self.hass.config_entries.async_update_entry(
                     self.config_entry, data=self.updated_config
                 )
-                return self.async_create_entry(title="", data=None)
+                return self.async_create_entry(title="", data={})
 
-        fields = {}
+        fields: vol.Schema = {}
         current_config = self.config_entry.data
         suggested_value = _list_to_string(current_config.get(CONF_UUID))
         _add_with_suggestion(fields, CONF_UUID, suggested_value)
@@ -186,7 +198,7 @@ def _list_to_string(items):
     return comma_separated_string
 
 
-def _string_to_list(string, schema):
+def _string_to_list(string: str, schema: vol.Schema) -> tuple[bool, list[str]]:
     invalid = False
     items = [x.strip() for x in string.split(",") if x.strip()]
     try:

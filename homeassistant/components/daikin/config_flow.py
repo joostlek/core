@@ -1,6 +1,7 @@
 """Config flow for the Daikin platform."""
 import asyncio
 import logging
+from typing import Any
 from uuid import uuid4
 
 from aiohttp import ClientError, web_exceptions
@@ -24,9 +25,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    def __init__(self):
-        """Initialize the Daikin config flow."""
-        self.host = None
+    host: str | None = None
 
     @property
     def schema(self):
@@ -39,7 +38,9 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
 
-    async def _create_entry(self, host, mac, key=None, uuid=None, password=None):
+    async def _create_entry(
+        self, host, mac, key=None, uuid=None, password=None
+    ) -> FlowResult:
         """Register new entry."""
         if not self.unique_id:
             await self.async_set_unique_id(mac)
@@ -108,7 +109,9 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         mac = device.mac
         return await self._create_entry(host, mac, key, uuid, password)
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """User initiated config flow."""
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=self.schema)
