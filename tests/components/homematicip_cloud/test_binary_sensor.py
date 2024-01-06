@@ -43,8 +43,8 @@ async def test_hmip_home_cloud_connection_sensor(
     hass: HomeAssistant, default_mock_hap_factory
 ) -> None:
     """Test HomematicipCloudConnectionSensor."""
-    entity_id = "binary_sensor.cloud_connection"
-    entity_name = "Cloud Connection"
+    entity_id = "binary_sensor.home_cloud_connection"
+    entity_name = "Home Cloud connection"
     device_model = None
     mock_hap = await default_mock_hap_factory.async_get_mock_hap(
         test_devices=[entity_name]
@@ -398,8 +398,8 @@ async def test_hmip_storm_sensor(hass: HomeAssistant, default_mock_hap_factory) 
 
 async def test_hmip_rain_sensor(hass: HomeAssistant, default_mock_hap_factory) -> None:
     """Test HomematicipRainSensor."""
-    entity_id = "binary_sensor.wettersensor_pro_raining"
-    entity_name = "Wettersensor - pro Raining"
+    entity_id = "binary_sensor.wettersensor_pro_rain"
+    entity_name = "Wettersensor - pro Rain"
     device_model = "HmIP-SWO-PR"
     mock_hap = await default_mock_hap_factory.async_get_mock_hap(
         test_devices=["Wettersensor - pro"]
@@ -462,8 +462,8 @@ async def test_hmip_security_zone_sensor_group(
     hass: HomeAssistant, default_mock_hap_factory
 ) -> None:
     """Test HomematicipSecurityZoneSensorGroup."""
-    entity_id = "binary_sensor.internal_securityzone"
-    entity_name = "INTERNAL SecurityZone"
+    entity_id = "binary_sensor.internal_security_zone"
+    entity_name = "INTERNAL security zone"
     device_model = "HmIP-SecurityZone"
     mock_hap = await default_mock_hap_factory.async_get_mock_hap(
         test_groups=["INTERNAL"]
@@ -500,7 +500,7 @@ async def test_hmip_security_sensor_group(
 ) -> None:
     """Test HomematicipSecuritySensorGroup."""
     entity_id = "binary_sensor.buro_sensors"
-    entity_name = "Büro Sensors"
+    entity_name = "Büro sensors"
     device_model = None
     mock_hap = await default_mock_hap_factory.async_get_mock_hap(test_groups=["Büro"])
 
@@ -573,8 +573,8 @@ async def test_hmip_multi_contact_interface(
     hass: HomeAssistant, default_mock_hap_factory
 ) -> None:
     """Test HomematicipMultiContactInterface."""
-    entity_id = "binary_sensor.wired_eingangsmodul_32_fach_channel5"
-    entity_name = "Wired Eingangsmodul – 32-fach Channel5"
+    entity_id = "binary_sensor.wired_eingangsmodul_32_fach_channel_5"
+    entity_name = "Wired Eingangsmodul – 32-fach Channel 5"
     device_model = "HmIPW-DRI32"
     mock_hap = await default_mock_hap_factory.async_get_mock_hap(
         test_devices=["Wired Eingangsmodul – 32-fach", "Licht Flur"]

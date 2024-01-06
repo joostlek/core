@@ -17,6 +17,7 @@ from .const import (
     HMIPC_AUTHTOKEN,
     HMIPC_HAPID,
     HMIPC_NAME,
+    PLATFORMS,
 )
 from .generic_entity import HomematicipGenericEntity  # noqa: F401
 from .hap import HomematicipAuth, HomematicipHAP  # noqa: F401
@@ -84,26 +85,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not await hap.async_setup():
         return False
 
-    await async_setup_services(hass)
-    _async_remove_obsolete_entities(hass, entry, hap)
-
-    # Register on HA stop event to gracefully shutdown HomematicIP Cloud connection
-    hap.reset_connection_listener = hass.bus.async_listen_once(
-        EVENT_HOMEASSISTANT_STOP, hap.shutdown
-    )
-
     # Register hap as device in registry.
     device_registry = dr.async_get(hass)
 
     home = hap.home
     hapname = home.label if home.label != entry.unique_id else f"Home-{home.label}"
 
+    print("HAPNAME: ", home.id)
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, home.id)},
         manufacturer="eQ-3",
         # Add the name from config entry.
         name=hapname,
+    )
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    await async_setup_services(hass)
+    _async_remove_obsolete_entities(hass, entry, hap)
+
+    # Register on HA stop event to gracefully shutdown HomematicIP Cloud connection
+    hap.reset_connection_listener = hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STOP, hap.shutdown
     )
     return True
 

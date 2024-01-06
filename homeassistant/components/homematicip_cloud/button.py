@@ -9,7 +9,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import DOMAIN as HMIPC_DOMAIN, HomematicipGenericEntity
-from .hap import HomematicipHAP
 
 
 async def async_setup_entry(
@@ -31,10 +30,8 @@ async def async_setup_entry(
 class HomematicipGarageDoorControllerButton(HomematicipGenericEntity, ButtonEntity):
     """Representation of the HomematicIP Wall mounted Garage Door Controller."""
 
-    def __init__(self, hap: HomematicipHAP, device) -> None:
-        """Initialize a wall mounted garage door controller."""
-        super().__init__(hap, device)
-        self._attr_icon = "mdi:arrow-up-down"
+    _attr_icon = "mdi:arrow-up-down"
+    _attr_name = None
 
     async def async_press(self) -> None:
         """Handle the button press."""

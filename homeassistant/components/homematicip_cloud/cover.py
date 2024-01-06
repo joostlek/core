@@ -69,6 +69,7 @@ class HomematicipBlindModule(HomematicipGenericEntity, CoverEntity):
     """Representation of the HomematicIP blind module."""
 
     _attr_device_class = CoverDeviceClass.BLIND
+    _attr_name = None
 
     @property
     def current_cover_position(self) -> int | None:
@@ -147,6 +148,7 @@ class HomematicipMultiCoverShutter(HomematicipGenericEntity, CoverEntity):
     """Representation of the HomematicIP cover shutter."""
 
     _attr_device_class = CoverDeviceClass.SHUTTER
+    _attr_name = None
 
     def __init__(
         self,

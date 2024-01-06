@@ -74,12 +74,12 @@ class HomematicipGenericEntity(Entity):
     """Representation of the HomematicIP generic entity."""
 
     _attr_should_poll = False
+    _attr_has_entity_name = True
 
     def __init__(
         self,
         hap: HomematicipHAP,
         device,
-        post: str | None = None,
         channel: int | None = None,
         is_multi_channel: bool | None = False,
     ) -> None:
@@ -87,12 +87,10 @@ class HomematicipGenericEntity(Entity):
         self._hap = hap
         self._home: AsyncHome = hap.home
         self._device = device
-        self._post = post
         self._channel = channel
         self._is_multi_channel = is_multi_channel
         # Marker showing that the HmIP device hase been removed.
         self.hmip_device_removed = False
-        _LOGGER.info("Setting up %s (%s)", self.name, self._device.modelType)
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -177,31 +175,31 @@ class HomematicipGenericEntity(Entity):
         self.hmip_device_removed = True
         self.hass.async_create_task(self.async_remove(force_remove=True))
 
-    @property
-    def name(self) -> str:
-        """Return the name of the generic entity."""
-
-        name = None
-        # Try to get a label from a channel.
-        if hasattr(self._device, "functionalChannels"):
-            if self._is_multi_channel:
-                name = self._device.functionalChannels[self._channel].label
-            elif len(self._device.functionalChannels) > 1:
-                name = self._device.functionalChannels[1].label
-
-        # Use device label, if name is not defined by channel label.
-        if not name:
-            name = self._device.label
-            if self._post:
-                name = f"{name} {self._post}"
-            elif self._is_multi_channel:
-                name = f"{name} Channel{self._channel}"
-
-        # Add a prefix to the name if the homematic ip home has a name.
-        if name and self._home.name:
-            name = f"{self._home.name} {name}"
-
-        return name
+    # @property
+    # def name(self) -> str:
+    #     """Return the name of the generic entity."""
+    #
+    #     name = None
+    #     # Try to get a label from a channel.
+    #     if hasattr(self._device, "functionalChannels"):
+    #         if self._is_multi_channel:
+    #             name = self._device.functionalChannels[self._channel].label
+    #         elif len(self._device.functionalChannels) > 1:
+    #             name = self._device.functionalChannels[1].label
+    #
+    #     # Use device label, if name is not defined by channel label.
+    #     if not name:
+    #         name = self._device.label
+    #         if self._post:
+    #             name = f"{name} {self._post}"
+    #         elif self._is_multi_channel:
+    #             name = f"{name} Channel{self._channel}"
+    #
+    #     # Add a prefix to the name if the homematic ip home has a name.
+    #     if name and self._home.name:
+    #         name = f"{self._home.name} {name}"
+    #
+    #     return name
 
     @property
     def available(self) -> bool:

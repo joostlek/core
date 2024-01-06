@@ -46,20 +46,20 @@ class HomematicipAlarmControlPanelEntity(AlarmControlPanelEntity):
         AlarmControlPanelEntityFeature.ARM_HOME
         | AlarmControlPanelEntityFeature.ARM_AWAY
     )
+    _attr_has_entity_name = True
+    _attr_name = None
 
     def __init__(self, hap: HomematicipHAP) -> None:
         """Initialize the alarm control panel."""
         self._home: AsyncHome = hap.home
-        _LOGGER.info("Setting up %s", self.name)
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device specific attributes."""
-        return DeviceInfo(
+        name = CONST_ALARM_CONTROL_PANEL_NAME
+        if home_name := self._home.name:
+            name = f"{home_name} {name}"
+        self._attr_device_info = DeviceInfo(
             identifiers={(HMIPC_DOMAIN, f"ACP {self._home.id}")},
             manufacturer="eQ-3",
             model=CONST_ALARM_CONTROL_PANEL_NAME,
-            name=self.name,
+            name=name,
             via_device=(HMIPC_DOMAIN, self._home.id),
         )
 
@@ -115,14 +115,6 @@ class HomematicipAlarmControlPanelEntity(AlarmControlPanelEntity):
                 ),
                 self.name,
             )
-
-    @property
-    def name(self) -> str:
-        """Return the name of the generic entity."""
-        name = CONST_ALARM_CONTROL_PANEL_NAME
-        if self._home.name:
-            name = f"{self._home.name} {name}"
-        return name
 
     @property
     def available(self) -> bool:
