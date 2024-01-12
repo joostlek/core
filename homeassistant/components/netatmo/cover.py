@@ -1,4 +1,5 @@
 """Support for Netatmo/Bubendorff covers."""
+
 from __future__ import annotations
 
 import logging
@@ -59,6 +60,8 @@ class NetatmoCover(NetatmoModuleEntity, CoverEntity):
     def __init__(self, netatmo_device: NetatmoDevice) -> None:
         """Initialize the Netatmo device."""
         super().__init__(netatmo_device)
+
+        self._config_url = CONF_URL_CONTROL
 
         self._attr_is_closed = self.device.current_position == 0
 

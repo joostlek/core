@@ -1,4 +1,5 @@
 """Support for the Netatmo cameras."""
+
 from __future__ import annotations
 
 import logging
@@ -84,7 +85,6 @@ class NetatmoCamera(NetatmoModuleEntity, Camera):
 
     _attr_brand = MANUFACTURER
     _attr_supported_features = CameraEntityFeature.STREAM
-    _attr_configuration_url = CONF_URL_SECURITY
     device: NaModules.Camera
     _quality = DEFAULT_QUALITY
     _monitoring: bool | None = None
@@ -98,7 +98,10 @@ class NetatmoCamera(NetatmoModuleEntity, Camera):
         Camera.__init__(self)
         super().__init__(netatmo_device)
 
-        self._attr_unique_id = f"{netatmo_device.device.entity_id}-{self.device_type}"
+        self._config_url = CONF_URL_SECURITY
+        self._attr_unique_id = (
+            f"{netatmo_device.device.entity_id}-{self.device_description[1]}"
+        )
         self._light_state = None
 
         self._publishers.extend(
@@ -181,7 +184,7 @@ class NetatmoCamera(NetatmoModuleEntity, Camera):
     def supported_features(self) -> CameraEntityFeature:
         """Return supported features."""
         supported_features = CameraEntityFeature.ON_OFF
-        if self.device_type != "NDB":
+        if self.device_description[1] != "NDB":
             supported_features |= CameraEntityFeature.STREAM
         return supported_features
 
@@ -212,9 +215,9 @@ class NetatmoCamera(NetatmoModuleEntity, Camera):
             self._attr_is_streaming = self.device.monitoring
             self._attr_motion_detection_enabled = self.device.monitoring
 
-        self.hass.data[DOMAIN][DATA_EVENTS][
-            self.device.entity_id
-        ] = self.process_events(self.device.events)
+        self.hass.data[DOMAIN][DATA_EVENTS][self.device.entity_id] = (
+            self.process_events(self.device.events)
+        )
 
         self._attr_extra_state_attributes.update(
             {
