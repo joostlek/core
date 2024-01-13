@@ -61,8 +61,6 @@ class NetatmoCover(NetatmoModuleEntity, CoverEntity):
         """Initialize the Netatmo device."""
         super().__init__(netatmo_device)
 
-        self._config_url = CONF_URL_CONTROL
-
         self._attr_is_closed = self.device.current_position == 0
 
         self._signal_name = f"{HOME}-{self.home.entity_id}"
