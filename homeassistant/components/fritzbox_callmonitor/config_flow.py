@@ -11,19 +11,12 @@ from requests.exceptions import ConnectionError as RequestsConnectionError
 import voluptuous as vol
 
 from homeassistant.config_entries import (
-    SOURCE_IMPORT,
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlow,
+    OptionsFlowWithConfigEntry,
 )
-from homeassistant.const import (
-    CONF_HOST,
-    CONF_NAME,
-    CONF_PASSWORD,
-    CONF_PORT,
-    CONF_USERNAME,
-)
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import callback
 
 from .base import FritzBoxPhonebook
@@ -75,12 +68,8 @@ class FritzBoxCallMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
     _fritzbox_phonebook: FritzBoxPhonebook
     _serial_number: str
 
-    def __init__(self) -> None:
-        """Initialize flow."""
-        self._phonebook_names: list[str] | None = None
-
     def _get_config_entry(self) -> ConfigFlowResult:
-        """Create and return an config entry."""
+        """Create and return a config entry."""
         return self.async_create_entry(
             title=self._phonebook_name,
             data={
@@ -126,15 +115,6 @@ class FritzBoxCallMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         return cast(str, phonebook_info[FRITZ_ATTR_NAME])
 
-    async def _get_list_of_phonebook_names(self) -> list[str]:
-        """Return list of names for all available phonebooks."""
-        phonebook_names: list[str] = []
-
-        for phonebook_id in self._phonebook_ids:
-            phonebook_names.append(await self._get_name_of_phonebook(phonebook_id))
-
-        return phonebook_names
-
     @staticmethod
     @callback
     def async_get_options_flow(
@@ -170,16 +150,11 @@ class FritzBoxCallMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
         if result != ConnectResult.SUCCESS:
             return self.async_abort(reason=result)
 
-        if self.context["source"] == SOURCE_IMPORT:
-            self._phonebook_id = user_input[CONF_PHONEBOOK]
-            self._phonebook_name = user_input[CONF_NAME]
-
-        elif len(self._phonebook_ids) > 1:
+        if len(self._phonebook_ids) > 1:
             return await self.async_step_phonebook()
 
-        else:
-            self._phonebook_id = DEFAULT_PHONEBOOK
-            self._phonebook_name = await self._get_name_of_phonebook(self._phonebook_id)
+        self._phonebook_id = DEFAULT_PHONEBOOK
+        self._phonebook_name = await self._get_name_of_phonebook(self._phonebook_id)
 
         await self.async_set_unique_id(f"{self._serial_number}-{self._phonebook_id}")
         self._abort_if_unique_id_configured()
@@ -191,20 +166,22 @@ class FritzBoxCallMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle a flow to chose one of multiple available phonebooks."""
 
-        if self._phonebook_names is None:
-            self._phonebook_names = await self._get_list_of_phonebook_names()
+        phonebook_names = [
+            await self._get_name_of_phonebook(phonebook_id)
+            for phonebook_id in self._phonebook_ids
+        ]
 
         if user_input is None:
             return self.async_show_form(
                 step_id="phonebook",
                 data_schema=vol.Schema(
-                    {vol.Required(CONF_PHONEBOOK): vol.In(self._phonebook_names)}
+                    {vol.Required(CONF_PHONEBOOK): vol.In(phonebook_names)}
                 ),
                 errors={},
             )
 
         self._phonebook_name = user_input[CONF_PHONEBOOK]
-        self._phonebook_id = self._phonebook_names.index(self._phonebook_name)
+        self._phonebook_id = phonebook_names.index(self._phonebook_name)
 
         await self.async_set_unique_id(f"{self._serial_number}-{self._phonebook_id}")
         self._abort_if_unique_id_configured()
@@ -212,12 +189,8 @@ class FritzBoxCallMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
         return self._get_config_entry()
 
 
-class FritzBoxCallMonitorOptionsFlowHandler(OptionsFlow):
+class FritzBoxCallMonitorOptionsFlowHandler(OptionsFlowWithConfigEntry):
     """Handle a fritzbox_callmonitor options flow."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize."""
-        self.config_entry = config_entry
 
     @classmethod
     def _are_prefixes_valid(cls, prefixes: str | None) -> bool:
@@ -237,9 +210,7 @@ class FritzBoxCallMonitorOptionsFlowHandler(OptionsFlow):
             {
                 vol.Optional(
                     CONF_PREFIXES,
-                    description={
-                        "suggested_value": self.config_entry.options.get(CONF_PREFIXES)
-                    },
+                    description={"suggested_value": self.options.get(CONF_PREFIXES)},
                 ): str
             }
         )
