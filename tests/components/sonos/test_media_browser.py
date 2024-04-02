@@ -39,7 +39,7 @@ def mock_browse_by_idstring(
 ) -> list[MockMusicServiceItem]:
     """Mock the call to browse_by_id_string."""
     if search_type == "albums" and (
-        idstring == "A:ALBUM/Abbey%20Road" or idstring == "A:ALBUM/Abbey Road"
+        idstring in ("A:ALBUM/Abbey%20Road", "A:ALBUM/Abbey Road")
     ):
         return [
             MockMusicServiceItem(
