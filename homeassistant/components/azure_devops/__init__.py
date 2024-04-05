@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import timedelta
 import logging
 from typing import Final
 
 from aioazuredevops.builds import DevOpsBuild
 from aioazuredevops.client import DevOpsClient
-from aioazuredevops.core import DevOpsProject
 import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
@@ -32,14 +30,6 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR]
 
 BUILDS_QUERY: Final = "?queryOrder=queueTimeDescending&maxBuildsPerDefinition=1"
-
-
-@dataclass(frozen=True)
-class AzureDevOpsEntityDescription(EntityDescription):
-    """Class describing Azure DevOps entities."""
-
-    organization: str = ""
-    project: DevOpsProject = None
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -108,21 +98,19 @@ class AzureDevOpsEntity(CoordinatorEntity[DataUpdateCoordinator[list[DevOpsBuild
 
     _attr_has_entity_name = True
 
-    entity_description: AzureDevOpsEntityDescription
-
     def __init__(
         self,
         coordinator: DataUpdateCoordinator[list[DevOpsBuild]],
-        entity_description: AzureDevOpsEntityDescription,
+        entity_description: EntityDescription,
+        organization: str,
+        project_name: str,
     ) -> None:
         """Initialize the Azure DevOps entity."""
         super().__init__(coordinator)
         self.entity_description = entity_description
-        self._attr_unique_id: str = "_".join(
-            [entity_description.organization, entity_description.key]
-        )
-        self._organization: str = entity_description.organization
-        self._project_name: str = entity_description.project.name
+        self._attr_unique_id = f"{organization}_{entity_description.key}"
+        self._organization = organization
+        self._project_name = project_name
 
 
 class AzureDevOpsDeviceEntity(AzureDevOpsEntity):
