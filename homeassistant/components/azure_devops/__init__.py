@@ -16,7 +16,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
-from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -101,27 +100,14 @@ class AzureDevOpsEntity(CoordinatorEntity[DataUpdateCoordinator[list[DevOpsBuild
     def __init__(
         self,
         coordinator: DataUpdateCoordinator[list[DevOpsBuild]],
-        entity_description: EntityDescription,
         organization: str,
         project_name: str,
     ) -> None:
         """Initialize the Azure DevOps entity."""
         super().__init__(coordinator)
-        self.entity_description = entity_description
-        self._attr_unique_id = f"{organization}_{entity_description.key}"
-        self._organization = organization
-        self._project_name = project_name
-
-
-class AzureDevOpsDeviceEntity(AzureDevOpsEntity):
-    """Defines a Azure DevOps device entity."""
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information about this Azure DevOps instance."""
-        return DeviceInfo(
+        self._attr_device_info = DeviceInfo(
             entry_type=DeviceEntryType.SERVICE,
-            identifiers={(DOMAIN, self._organization, self._project_name)},  # type: ignore[arg-type]
-            manufacturer=self._organization,
-            name=self._project_name,
+            identifiers={(DOMAIN, organization, project_name)},  # type: ignore[arg-type]
+            manufacturer=organization,
+            name=project_name,
         )

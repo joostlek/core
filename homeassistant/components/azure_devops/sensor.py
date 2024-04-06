@@ -22,8 +22,8 @@ from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
-from . import AzureDevOpsDeviceEntity
-from .const import DOMAIN
+from . import AzureDevOpsEntity
+from .const import CONF_ORG, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -138,17 +138,17 @@ async def async_setup_entry(
         AzureDevOpsBuildSensor(
             coordinator,
             description,
-            project.organization,
+            entry.data[CONF_ORG],
             project.name,
             key,
         )
         for description in BASE_BUILD_SENSOR_DESCRIPTIONS
         for key, build in enumerate(initial_builds)
-        if build.project is None or build.definition is None
+        if build.project and build.definition
     )
 
 
-class AzureDevOpsBuildSensor(AzureDevOpsDeviceEntity, SensorEntity):
+class AzureDevOpsBuildSensor(AzureDevOpsEntity, SensorEntity):
     """Define a Azure DevOps build sensor."""
 
     entity_description: AzureDevOpsBuildSensorEntityDescription
@@ -162,9 +162,10 @@ class AzureDevOpsBuildSensor(AzureDevOpsDeviceEntity, SensorEntity):
         item_key: int,
     ) -> None:
         """Initialize."""
-        super().__init__(coordinator, description, organization, project_name)
+        super().__init__(coordinator, organization, project_name)
+        self.entity_description = description
         self.item_key = item_key
-        self._attr_unique_id = f"{self.build.project.project_id}_{self.build.definition.build_id}_{description.key}"
+        self._attr_unique_id = f"{organization}_{self.build.project.project_id}_{self.build.definition.build_id}_{description.key}"
         self._attr_translation_placeholders = {
             "definition_name": self.build.definition.name
         }
