@@ -1,4 +1,5 @@
 """Support for the Google Cloud TTS service."""
+
 import asyncio
 import logging
 import os
@@ -6,7 +7,11 @@ import os
 from google.cloud import texttospeech
 import voluptuous as vol
 
-from homeassistant.components.tts import CONF_LANG, PLATFORM_SCHEMA, Provider
+from homeassistant.components.tts import (
+    CONF_LANG,
+    PLATFORM_SCHEMA as TTS_PLATFORM_SCHEMA,
+    Provider,
+)
 import homeassistant.helpers.config_validation as cv
 
 _LOGGER = logging.getLogger(__name__)
@@ -135,7 +140,7 @@ GAIN_SCHEMA = vol.All(vol.Coerce(float), vol.Clamp(min=MIN_GAIN, max=MAX_GAIN))
 PROFILES_SCHEMA = vol.All(cv.ensure_list, [vol.In(SUPPORTED_PROFILES)])
 TEXT_TYPE_SCHEMA = vol.All(vol.Lower, vol.In(SUPPORTED_TEXT_TYPES))
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = TTS_PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_KEY_FILE): cv.string,
         vol.Optional(CONF_LANG, default=DEFAULT_LANG): vol.In(SUPPORTED_LANGUAGES),
@@ -292,9 +297,9 @@ class GoogleCloudTTSProvider(Provider):
                 )
                 return _encoding, response.audio_content
 
-        except asyncio.TimeoutError as ex:
+        except TimeoutError as ex:
             _LOGGER.error("Timeout for Google Cloud TTS call: %s", ex)
-        except Exception as ex:  # pylint: disable=broad-except
-            _LOGGER.exception("Error occurred during Google Cloud TTS call: %s", ex)
+        except Exception:
+            _LOGGER.exception("Error occurred during Google Cloud TTS call")
 
         return None, None

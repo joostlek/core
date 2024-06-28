@@ -1,4 +1,5 @@
 """The Panasonic Viera integration."""
+
 from functools import partial
 import logging
 from urllib.error import HTTPError, URLError
@@ -169,8 +170,8 @@ class Remote:
             self._control = None
             self.state = STATE_OFF
             self.available = False
-        except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.exception("An unknown error occurred: %s", err)
+        except Exception:
+            _LOGGER.exception("An unknown error occurred")
             self._control = None
             self.state = STATE_OFF
             self.available = False
@@ -188,10 +189,10 @@ class Remote:
         self.muted = self._control.get_mute()
         self.volume = self._control.get_volume() / 100
 
-    async def async_send_key(self, key):
+    async def async_send_key(self, key: Keys | str) -> None:
         """Send a key to the TV and handle exceptions."""
         try:
-            key = getattr(Keys, key)
+            key = getattr(Keys, key.upper())
         except (AttributeError, TypeError):
             key = getattr(key, "value", key)
 
@@ -200,13 +201,13 @@ class Remote:
     async def async_turn_on(self):
         """Turn on the TV."""
         if self.state != STATE_ON:
-            await self.async_send_key(Keys.power)
+            await self.async_send_key(Keys.POWER)
             await self.async_update()
 
     async def async_turn_off(self):
         """Turn off the TV."""
         if self.state != STATE_OFF:
-            await self.async_send_key(Keys.power)
+            await self.async_send_key(Keys.POWER)
             self.state = STATE_OFF
             await self.async_update()
 
@@ -236,9 +237,6 @@ class Remote:
         """Handle errors from func, set available and reconnect if needed."""
         try:
             result = await self._hass.async_add_executor_job(func, *args)
-            self.state = STATE_ON
-            self.available = True
-            return result
         except EncryptionRequired:
             _LOGGER.error(
                 "The connection couldn't be encrypted. Please reconfigure your TV"
@@ -249,12 +247,18 @@ class Remote:
             self.state = STATE_OFF
             self.available = True
             await self.async_create_remote_control()
+            return None
         except (URLError, OSError) as err:
             _LOGGER.debug("An error occurred: %s", err)
             self.state = STATE_OFF
             self.available = False
             await self.async_create_remote_control()
-        except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.exception("An unknown error occurred: %s", err)
+            return None
+        except Exception:
+            _LOGGER.exception("An unknown error occurred")
             self.state = STATE_OFF
             self.available = False
+            return None
+        self.state = STATE_ON
+        self.available = True
+        return result

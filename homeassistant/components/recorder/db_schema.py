@@ -1,4 +1,5 @@
 """Models for SQLAlchemy."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -34,13 +35,17 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import DeclarativeBase, Mapped, aliased, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
+from homeassistant.components.sensor import ATTR_STATE_CLASS
 from homeassistant.const import (
+    ATTR_DEVICE_CLASS,
+    ATTR_FRIENDLY_NAME,
+    ATTR_UNIT_OF_MEASUREMENT,
+    MATCH_ALL,
     MAX_LENGTH_EVENT_EVENT_TYPE,
     MAX_LENGTH_STATE_ENTITY_ID,
     MAX_LENGTH_STATE_STATE,
 )
-from homeassistant.core import Context, Event, EventOrigin, State
-from homeassistant.helpers.entity import EntityInfo
+from homeassistant.core import Context, Event, EventOrigin, EventStateChangedData, State
 from homeassistant.helpers.json import JSON_DUMP, json_bytes, json_bytes_strip_null
 import homeassistant.util.dt as dt_util
 from homeassistant.util.json import (
@@ -68,7 +73,7 @@ class Base(DeclarativeBase):
     """Base class for tables."""
 
 
-SCHEMA_VERSION = 42
+SCHEMA_VERSION = 43
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,6 +89,7 @@ TABLE_STATISTICS = "statistics"
 TABLE_STATISTICS_META = "statistics_meta"
 TABLE_STATISTICS_RUNS = "statistics_runs"
 TABLE_STATISTICS_SHORT_TERM = "statistics_short_term"
+TABLE_MIGRATION_CHANGES = "migration_changes"
 
 STATISTICS_TABLES = ("statistics", "statistics_short_term")
 
@@ -100,6 +106,7 @@ ALL_TABLES = [
     TABLE_EVENT_TYPES,
     TABLE_RECORDER_RUNS,
     TABLE_SCHEMA_CHANGES,
+    TABLE_MIGRATION_CHANGES,
     TABLE_STATES_META,
     TABLE_STATISTICS,
     TABLE_STATISTICS_META,
@@ -176,13 +183,17 @@ class NativeLargeBinary(LargeBinary):
 # For MariaDB and MySQL we can use an unsigned integer type since it will fit 2**32
 # for sqlite and postgresql we use a bigint
 UINT_32_TYPE = BigInteger().with_variant(
-    mysql.INTEGER(unsigned=True), "mysql", "mariadb"  # type: ignore[no-untyped-call]
+    mysql.INTEGER(unsigned=True),  # type: ignore[no-untyped-call]
+    "mysql",
+    "mariadb",
 )
 JSON_VARIANT_CAST = Text().with_variant(
-    postgresql.JSON(none_as_null=True), "postgresql"  # type: ignore[no-untyped-call]
+    postgresql.JSON(none_as_null=True),  # type: ignore[no-untyped-call]
+    "postgresql",
 )
 JSONB_VARIANT_CAST = Text().with_variant(
-    postgresql.JSONB(none_as_null=True), "postgresql"  # type: ignore[no-untyped-call]
+    postgresql.JSONB(none_as_null=True),  # type: ignore[no-untyped-call]
+    "postgresql",
 )
 DATETIME_TYPE = (
     DateTime(timezone=True)
@@ -292,7 +303,7 @@ class Events(Base):
             event_data=None,
             origin_idx=EVENT_ORIGIN_TO_IDX.get(event.origin),
             time_fired=None,
-            time_fired_ts=dt_util.utc_to_timestamp(event.time_fired),
+            time_fired_ts=event.time_fired_timestamp,
             context_id=None,
             context_id_bin=ulid_to_bytes_or_none(event.context.id),
             context_user_id=None,
@@ -315,7 +326,7 @@ class Events(Base):
                 EventOrigin(self.origin)
                 if self.origin
                 else EVENT_ORIGIN_ORDER[self.origin_idx or 0],
-                dt_util.utc_from_timestamp(self.time_fired_ts or 0),
+                self.time_fired_ts or 0,
                 context=context,
             )
         except JSON_DECODE_EXCEPTIONS:
@@ -422,6 +433,7 @@ class States(Base):
     event_id: Mapped[int | None] = mapped_column(UNUSED_LEGACY_INTEGER_COLUMN)
     last_changed: Mapped[datetime | None] = mapped_column(UNUSED_LEGACY_DATETIME_COLUMN)
     last_changed_ts: Mapped[float | None] = mapped_column(TIMESTAMP_TYPE)
+    last_reported_ts: Mapped[float | None] = mapped_column(TIMESTAMP_TYPE)
     last_updated: Mapped[datetime | None] = mapped_column(UNUSED_LEGACY_DATETIME_COLUMN)
     last_updated_ts: Mapped[float | None] = mapped_column(
         TIMESTAMP_TYPE, default=time.time, index=True
@@ -471,10 +483,10 @@ class States(Base):
         return date_time.isoformat(sep=" ", timespec="seconds")
 
     @staticmethod
-    def from_event(event: Event) -> States:
+    def from_event(event: Event[EventStateChangedData]) -> States:
         """Create object from a state_changed event."""
         entity_id = event.data["entity_id"]
-        state: State | None = event.data.get("new_state")
+        state = event.data["new_state"]
         dbstate = States(
             entity_id=entity_id,
             attributes=None,
@@ -491,16 +503,21 @@ class States(Base):
         # None state means the state was removed from the state machine
         if state is None:
             dbstate.state = ""
-            dbstate.last_updated_ts = dt_util.utc_to_timestamp(event.time_fired)
+            dbstate.last_updated_ts = event.time_fired_timestamp
             dbstate.last_changed_ts = None
+            dbstate.last_reported_ts = None
             return dbstate
 
         dbstate.state = state.state
-        dbstate.last_updated_ts = dt_util.utc_to_timestamp(state.last_updated)
+        dbstate.last_updated_ts = state.last_updated_timestamp
         if state.last_updated == state.last_changed:
             dbstate.last_changed_ts = None
         else:
-            dbstate.last_changed_ts = dt_util.utc_to_timestamp(state.last_changed)
+            dbstate.last_changed_ts = state.last_changed_timestamp
+        if state.last_updated == state.last_reported:
+            dbstate.last_reported_ts = None
+        else:
+            dbstate.last_reported_ts = state.last_reported_timestamp
 
         return dbstate
 
@@ -517,21 +534,27 @@ class States(Base):
             # When json_loads fails
             _LOGGER.exception("Error converting row to state: %s", self)
             return None
+        last_updated = dt_util.utc_from_timestamp(self.last_updated_ts or 0)
         if self.last_changed_ts is None or self.last_changed_ts == self.last_updated_ts:
-            last_changed = last_updated = dt_util.utc_from_timestamp(
-                self.last_updated_ts or 0
-            )
+            last_changed = dt_util.utc_from_timestamp(self.last_updated_ts or 0)
         else:
-            last_updated = dt_util.utc_from_timestamp(self.last_updated_ts or 0)
             last_changed = dt_util.utc_from_timestamp(self.last_changed_ts or 0)
+        if (
+            self.last_reported_ts is None
+            or self.last_reported_ts == self.last_updated_ts
+        ):
+            last_reported = dt_util.utc_from_timestamp(self.last_updated_ts or 0)
+        else:
+            last_reported = dt_util.utc_from_timestamp(self.last_reported_ts or 0)
         return State(
             self.entity_id or "",
             self.state,  # type: ignore[arg-type]
             # Join the state_attributes table on attributes_id to get the attributes
             # for newer states
             attrs,
-            last_changed,
-            last_updated,
+            last_changed=last_changed,
+            last_reported=last_reported,
+            last_updated=last_updated,
             context=context,
             validate_entity_id=validate_entity_id,
         )
@@ -558,18 +581,37 @@ class StateAttributes(Base):
 
     @staticmethod
     def shared_attrs_bytes_from_event(
-        event: Event,
-        entity_sources: dict[str, EntityInfo],
+        event: Event[EventStateChangedData],
         dialect: SupportedDialect | None,
     ) -> bytes:
         """Create shared_attrs from a state_changed event."""
-        state: State | None = event.data.get("new_state")
         # None state means the state was removed from the state machine
-        if state is None:
+        if (state := event.data["new_state"]) is None:
             return b"{}"
-        exclude_attrs = set(ALL_DOMAIN_EXCLUDE_ATTRS)
         if state_info := state.state_info:
-            exclude_attrs |= state_info["unrecorded_attributes"]
+            unrecorded_attributes = state_info["unrecorded_attributes"]
+            exclude_attrs = {
+                *ALL_DOMAIN_EXCLUDE_ATTRS,
+                *unrecorded_attributes,
+            }
+            if MATCH_ALL in unrecorded_attributes:
+                # Don't exclude device class, state class, unit of measurement
+                # or friendly name when using the MATCH_ALL exclude constant
+                _exclude_attributes = {
+                    k: v
+                    for k, v in state.attributes.items()
+                    if k
+                    not in (
+                        ATTR_DEVICE_CLASS,
+                        ATTR_STATE_CLASS,
+                        ATTR_UNIT_OF_MEASUREMENT,
+                        ATTR_FRIENDLY_NAME,
+                    )
+                }
+                exclude_attrs.update(_exclude_attributes)
+
+        else:
+            exclude_attrs = ALL_DOMAIN_EXCLUDE_ATTRS
         encoder = json_bytes_strip_null if dialect == PSQL_DIALECT else json_bytes
         bytes_result = encoder(
             {k: v for k, v in state.attributes.items() if k not in exclude_attrs}
@@ -694,6 +736,7 @@ class Statistics(Base, StatisticsBase):
             "start_ts",
             unique=True,
         ),
+        _DEFAULT_TABLE_ARGS,
     )
     __tablename__ = TABLE_STATISTICS
 
@@ -711,6 +754,7 @@ class StatisticsShortTerm(Base, StatisticsBase):
             "start_ts",
             unique=True,
         ),
+        _DEFAULT_TABLE_ARGS,
     )
     __tablename__ = TABLE_STATISTICS_SHORT_TERM
 
@@ -739,7 +783,10 @@ class StatisticsMeta(Base):
 class RecorderRuns(Base):
     """Representation of recorder run."""
 
-    __table_args__ = (Index("ix_recorder_runs_start_end", "start", "end"),)
+    __table_args__ = (
+        Index("ix_recorder_runs_start_end", "start", "end"),
+        _DEFAULT_TABLE_ARGS,
+    )
     __tablename__ = TABLE_RECORDER_RUNS
     run_id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     start: Mapped[datetime] = mapped_column(DATETIME_TYPE, default=dt_util.utcnow)
@@ -764,10 +811,22 @@ class RecorderRuns(Base):
         return self
 
 
+class MigrationChanges(Base):
+    """Representation of migration changes."""
+
+    __tablename__ = TABLE_MIGRATION_CHANGES
+    __table_args__ = (_DEFAULT_TABLE_ARGS,)
+
+    migration_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    version: Mapped[int] = mapped_column(SmallInteger)
+
+
 class SchemaChanges(Base):
     """Representation of schema version changes."""
 
     __tablename__ = TABLE_SCHEMA_CHANGES
+    __table_args__ = (_DEFAULT_TABLE_ARGS,)
+
     change_id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     schema_version: Mapped[int | None] = mapped_column(Integer)
     changed: Mapped[datetime] = mapped_column(DATETIME_TYPE, default=dt_util.utcnow)
@@ -786,6 +845,8 @@ class StatisticsRuns(Base):
     """Representation of statistics run."""
 
     __tablename__ = TABLE_STATISTICS_RUNS
+    __table_args__ = (_DEFAULT_TABLE_ARGS,)
+
     run_id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
     start: Mapped[datetime] = mapped_column(DATETIME_TYPE, index=True)
 

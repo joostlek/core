@@ -1,4 +1,5 @@
 """Support for Hue groups (room/zone)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -25,6 +26,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+import homeassistant.helpers.entity_registry as er
 
 from ..bridge import HueBridge
 from ..const import DOMAIN
@@ -96,6 +98,8 @@ class GroupedHueLight(HueBaseEntity, LightEntity):
         self.api: HueBridgeV2 = bridge.api
         self._attr_supported_features |= LightEntityFeature.FLASH
         self._attr_supported_features |= LightEntityFeature.TRANSITION
+        self._restore_brightness: float | None = None
+        self._brightness_pct: float = 0
         # we create a virtual service/device for Hue zones/rooms
         # so we have a parent for grouped lights and scenes
         self._attr_device_info = DeviceInfo(
@@ -133,15 +137,18 @@ class GroupedHueLight(HueBaseEntity, LightEntity):
         scenes = {
             x.metadata.name for x in self.api.scenes if x.group.rid == self.group.id
         }
-        lights = {
-            self.controller.get_device(x.id).metadata.name
-            for x in self.controller.get_lights(self.resource.id)
-        }
+        light_resource_ids = tuple(
+            x.id for x in self.controller.get_lights(self.resource.id)
+        )
+        light_names, light_entities = self._get_names_and_entity_ids_for_resource_ids(
+            light_resource_ids
+        )
         return {
             "is_hue_group": True,
             "hue_scenes": scenes,
             "hue_type": self.group.type.value,
-            "lights": lights,
+            "lights": light_names,
+            "entity_id": light_entities,
             "dynamics": self._dynamic_mode_active,
         }
 
@@ -152,6 +159,18 @@ class GroupedHueLight(HueBaseEntity, LightEntity):
         color_temp = normalize_hue_colortemp(kwargs.get(ATTR_COLOR_TEMP))
         brightness = normalize_hue_brightness(kwargs.get(ATTR_BRIGHTNESS))
         flash = kwargs.get(ATTR_FLASH)
+
+        if self._restore_brightness and brightness is None:
+            # The Hue bridge sets the brightness to 1% when turning on a bulb
+            # when a transition was used to turn off the bulb.
+            # This issue has been reported on the Hue forum several times:
+            # https://developers.meethue.com/forum/t/brightness-turns-down-to-1-automatically-shortly-after-sending-off-signal-hue-bug/5692
+            # https://developers.meethue.com/forum/t/lights-turn-on-with-lowest-brightness-via-siri-if-turned-off-via-api/6700
+            # https://developers.meethue.com/forum/t/using-transitiontime-with-on-false-resets-bri-to-1/4585
+            # https://developers.meethue.com/forum/t/bri-value-changing-in-switching-lights-on-off/6323
+            # https://developers.meethue.com/forum/t/fade-in-fade-out/6673
+            brightness = self._restore_brightness
+            self._restore_brightness = None
 
         if flash is not None:
             await self.async_set_flash(flash)
@@ -170,6 +189,8 @@ class GroupedHueLight(HueBaseEntity, LightEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
         transition = normalize_hue_transition(kwargs.get(ATTR_TRANSITION))
+        if transition is not None:
+            self._restore_brightness = self._brightness_pct
         flash = kwargs.get(ATTR_FLASH)
 
         if flash is not None:
@@ -244,6 +265,7 @@ class GroupedHueLight(HueBaseEntity, LightEntity):
             if len(supported_color_modes) == 0:
                 # only add color mode brightness if no color variants
                 supported_color_modes.add(ColorMode.BRIGHTNESS)
+            self._brightness_pct = total_brightness / lights_with_dimming_support
             self._attr_brightness = round(
                 ((total_brightness / lights_with_dimming_support) / 100) * 255
             )
@@ -252,10 +274,7 @@ class GroupedHueLight(HueBaseEntity, LightEntity):
         self._dynamic_mode_active = lights_in_dynamic_mode > 0
         self._attr_supported_color_modes = supported_color_modes
         # pick a winner for the current colormode
-        if (
-            lights_with_color_temp_support > 0
-            and lights_in_colortemp_mode == lights_with_color_temp_support
-        ):
+        if lights_with_color_temp_support > 0 and lights_in_colortemp_mode > 0:
             self._attr_color_mode = ColorMode.COLOR_TEMP
         elif lights_with_color_support > 0:
             self._attr_color_mode = ColorMode.XY
@@ -263,3 +282,19 @@ class GroupedHueLight(HueBaseEntity, LightEntity):
             self._attr_color_mode = ColorMode.BRIGHTNESS
         else:
             self._attr_color_mode = ColorMode.ONOFF
+
+    @callback
+    def _get_names_and_entity_ids_for_resource_ids(
+        self, resource_ids: tuple[str]
+    ) -> tuple[set[str], set[str]]:
+        """Return the names and entity ids for the given Hue (light) resource IDs."""
+        ent_reg = er.async_get(self.hass)
+        light_names: set[str] = set()
+        light_entities: set[str] = set()
+        for resource_id in resource_ids:
+            light_names.add(self.controller.get_device(resource_id).metadata.name)
+            if entity_id := ent_reg.async_get_entity_id(
+                self.platform.domain, DOMAIN, resource_id
+            ):
+                light_entities.add(entity_id)
+        return light_names, light_entities

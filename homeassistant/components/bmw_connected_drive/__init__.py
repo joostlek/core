@@ -1,4 +1,5 @@
 """Reads vehicle status from MyBMW portal."""
+
 from __future__ import annotations
 
 import logging
@@ -10,7 +11,11 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_DEVICE_ID, CONF_ENTITY_ID, CONF_NAME, Platform
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import discovery, entity_registry as er
+from homeassistant.helpers import (
+    device_registry as dr,
+    discovery,
+    entity_registry as er,
+)
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.typing import ConfigType
@@ -67,7 +72,10 @@ def _async_migrate_options_from_data_if_missing(
     options = dict(entry.options)
 
     if CONF_READ_ONLY in data or list(options) != list(DEFAULT_OPTIONS):
-        options = dict(DEFAULT_OPTIONS, **options)
+        options = dict(
+            DEFAULT_OPTIONS,
+            **{k: v for k, v in options.items() if k in DEFAULT_OPTIONS},
+        )
         options[CONF_READ_ONLY] = data.pop(CONF_READ_ONLY, False)
 
         hass.config_entries.async_update_entry(entry, data=data, options=options)
@@ -145,6 +153,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.data[DOMAIN][DATA_HASS_CONFIG],
         )
     )
+
+    # Clean up vehicles which are not assigned to the account anymore
+    account_vehicles = {(DOMAIN, v.vin) for v in coordinator.account.vehicles}
+    device_registry = dr.async_get(hass)
+    device_entries = dr.async_entries_for_config_entry(
+        device_registry, config_entry_id=entry.entry_id
+    )
+    for device in device_entries:
+        if not device.identifiers.intersection(account_vehicles):
+            device_registry.async_update_device(
+                device.id, remove_config_entry_id=entry.entry_id
+            )
 
     return True
 

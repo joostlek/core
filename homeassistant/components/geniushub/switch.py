@@ -1,4 +1,5 @@
 """Support for Genius Hub switch/outlet devices."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -10,7 +11,7 @@ from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType, VolDictType
 
 from . import ATTR_DURATION, DOMAIN, GeniusZone
 
@@ -18,7 +19,7 @@ GH_ON_OFF_ZONE = "on / off"
 
 SVC_SET_SWITCH_OVERRIDE = "set_switch_override"
 
-SET_SWITCH_OVERRIDE_SCHEMA = {
+SET_SWITCH_OVERRIDE_SCHEMA: VolDictType = {
     vol.Optional(ATTR_DURATION): vol.All(
         cv.time_period,
         vol.Range(min=timedelta(minutes=5), max=timedelta(days=1)),
@@ -68,9 +69,12 @@ class GeniusSwitch(GeniusZone, SwitchEntity):
     def is_on(self) -> bool:
         """Return the current state of the on/off zone.
 
-        The zone is considered 'on' if & only if it is override/on (e.g. timer/on is 'off').
+        The zone is considered 'on' if the mode is either 'override' or 'timer'.
         """
-        return self._zone.data["mode"] == "override" and self._zone.data["setpoint"]
+        return (
+            self._zone.data["mode"] in ["override", "timer"]
+            and self._zone.data["setpoint"]
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Send the zone to Timer mode.

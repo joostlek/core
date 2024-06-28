@@ -1,6 +1,8 @@
 """The tests for the Template button platform."""
+
 import datetime as dt
-from unittest.mock import patch
+
+from freezegun.api import FrozenDateTimeFactory
 
 from homeassistant import setup
 from homeassistant.components.button import DOMAIN as BUTTON_DOMAIN, SERVICE_PRESS
@@ -12,8 +14,8 @@ from homeassistant.const import (
     CONF_ICON,
     STATE_UNKNOWN,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_registry import async_get
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.helpers import entity_registry as er
 
 from tests.common import assert_setup_component
 
@@ -59,7 +61,12 @@ async def test_missing_required_keys(hass: HomeAssistant) -> None:
     assert hass.states.async_all("button") == []
 
 
-async def test_all_optional_config(hass: HomeAssistant, calls) -> None:
+async def test_all_optional_config(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    freezer: FrozenDateTimeFactory,
+    calls: list[ServiceCall],
+) -> None:
     """Test: including all optional templates is ok."""
     with assert_setup_component(1, "template"):
         assert await setup.async_setup_component(
@@ -98,14 +105,13 @@ async def test_all_optional_config(hass: HomeAssistant, calls) -> None:
     )
 
     now = dt.datetime.now(dt.UTC)
-
-    with patch("homeassistant.util.dt.utcnow", return_value=now):
-        await hass.services.async_call(
-            BUTTON_DOMAIN,
-            SERVICE_PRESS,
-            {CONF_ENTITY_ID: _TEST_OPTIONS_BUTTON},
-            blocking=True,
-        )
+    freezer.move_to(now)
+    await hass.services.async_call(
+        BUTTON_DOMAIN,
+        SERVICE_PRESS,
+        {CONF_ENTITY_ID: _TEST_OPTIONS_BUTTON},
+        blocking=True,
+    )
 
     assert len(calls) == 1
     assert calls[0].data["caller"] == _TEST_OPTIONS_BUTTON
@@ -121,8 +127,7 @@ async def test_all_optional_config(hass: HomeAssistant, calls) -> None:
         _TEST_OPTIONS_BUTTON,
     )
 
-    er = async_get(hass)
-    assert er.async_get_entity_id("button", "template", "test-test")
+    assert entity_registry.async_get_entity_id("button", "template", "test-test")
 
 
 async def test_name_template(hass: HomeAssistant) -> None:

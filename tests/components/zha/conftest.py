@@ -1,5 +1,6 @@
 """Test configuration for the ZHA component."""
-from collections.abc import Callable, Generator
+
+from collections.abc import Callable
 import itertools
 import time
 from typing import Any
@@ -7,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
 import warnings
 
 import pytest
+from typing_extensions import Generator
 import zigpy
 from zigpy.application import ControllerApplication
 import zigpy.backups
@@ -25,8 +27,12 @@ import zigpy.zdo.types as zdo_t
 
 import homeassistant.components.zha.core.const as zha_const
 import homeassistant.components.zha.core.device as zha_core_device
+from homeassistant.components.zha.core.gateway import ZHAGateway
 from homeassistant.components.zha.core.helpers import get_zha_gateway
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import restore_state
 from homeassistant.setup import async_setup_component
+import homeassistant.util.dt as dt_util
 
 from .common import patch_cluster as common_patch_cluster
 
@@ -35,9 +41,10 @@ from tests.components.light.conftest import mock_light_profiles  # noqa: F401
 
 FIXTURE_GRP_ID = 0x1001
 FIXTURE_GRP_NAME = "fixture group"
+COUNTER_NAMES = ["counter_1", "counter_2", "counter_3"]
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def disable_request_retry_delay():
     """Disable ZHA request retrying delay to speed up failures."""
 
@@ -48,7 +55,7 @@ def disable_request_retry_delay():
         yield
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def globally_load_quirks():
     """Load quirks automatically so that ZHA tests run deterministically in isolation.
 
@@ -57,7 +64,7 @@ def globally_load_quirks():
     run.
     """
 
-    import zhaquirks
+    import zhaquirks  # pylint: disable=import-outside-toplevel
 
     zhaquirks.setup()
 
@@ -81,8 +88,8 @@ class _FakeApp(ControllerApplication):
     async def permit_ncp(self, time_s: int = 60):
         pass
 
-    async def permit_with_key(
-        self, node: zigpy.types.EUI64, code: bytes, time_s: int = 60
+    async def permit_with_link_key(
+        self, node: zigpy.types.EUI64, link_key: zigpy.types.KeyData, time_s: int = 60
     ):
         pass
 
@@ -133,7 +140,7 @@ def _wrap_mock_instance(obj: Any) -> MagicMock:
         real_attr = getattr(obj, attr_name)
         mock_attr = getattr(mock, attr_name)
 
-        if callable(real_attr):
+        if callable(real_attr) and not hasattr(real_attr, "__aenter__"):
             mock_attr.side_effect = real_attr
         else:
             setattr(mock, attr_name, real_attr)
@@ -151,6 +158,9 @@ async def zigpy_app_controller():
             zigpy.config.CONF_STARTUP_ENERGY_SCAN: False,
             zigpy.config.CONF_NWK_BACKUP_ENABLED: False,
             zigpy.config.CONF_TOPO_SCAN_ENABLED: False,
+            zigpy.config.CONF_OTA: {
+                zigpy.config.CONF_OTA_ENABLED: False,
+            },
         }
     )
 
@@ -162,6 +172,10 @@ async def zigpy_app_controller():
     app.state.network_info.extended_pan_id = app.state.node_info.ieee
     app.state.network_info.channel = 15
     app.state.network_info.network_key.key = zigpy.types.KeyData(range(16))
+    app.state.counters = zigpy.state.CounterGroups()
+    app.state.counters["ezsp_counters"] = zigpy.state.CounterGroup("ezsp_counters")
+    for name in COUNTER_NAMES:
+        app.state.counters["ezsp_counters"][name].increment()
 
     # Create a fake coordinator device
     dev = app.add_device(nwk=app.state.node_info.nwk, ieee=app.state.node_info.ieee)
@@ -185,7 +199,7 @@ async def zigpy_app_controller():
 
 
 @pytest.fixture(name="config_entry")
-async def config_entry_fixture(hass) -> MockConfigEntry:
+async def config_entry_fixture() -> MockConfigEntry:
     """Fixture representing a config entry."""
     return MockConfigEntry(
         version=3,
@@ -213,21 +227,26 @@ async def config_entry_fixture(hass) -> MockConfigEntry:
 @pytest.fixture
 def mock_zigpy_connect(
     zigpy_app_controller: ControllerApplication,
-) -> Generator[ControllerApplication, None, None]:
+) -> Generator[ControllerApplication]:
     """Patch the zigpy radio connection with our mock application."""
-    with patch(
-        "bellows.zigbee.application.ControllerApplication.new",
-        return_value=zigpy_app_controller,
-    ), patch(
-        "bellows.zigbee.application.ControllerApplication",
-        return_value=zigpy_app_controller,
+    with (
+        patch(
+            "bellows.zigbee.application.ControllerApplication.new",
+            return_value=zigpy_app_controller,
+        ),
+        patch(
+            "bellows.zigbee.application.ControllerApplication",
+            return_value=zigpy_app_controller,
+        ),
     ):
         yield zigpy_app_controller
 
 
 @pytest.fixture
 def setup_zha(
-    hass, config_entry: MockConfigEntry, mock_zigpy_connect: ControllerApplication
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_zigpy_connect: ControllerApplication,
 ):
     """Set up ZHA component."""
     zha_config = {zha_const.CONF_ENABLE_QUIRKS: False}
@@ -370,7 +389,7 @@ def zha_device_restored(hass, zigpy_app_controller, setup_zha):
 
 
 @pytest.fixture(params=["zha_device_joined", "zha_device_restored"])
-def zha_device_joined_restored(request):
+def zha_device_joined_restored(request: pytest.FixtureRequest):
     """Join or restore ZHA device."""
     named_method = request.getfixturevalue(request.param)
     named_method.name = request.param
@@ -379,7 +398,7 @@ def zha_device_joined_restored(request):
 
 @pytest.fixture
 def zha_device_mock(
-    hass, zigpy_device_mock
+    hass: HomeAssistant, config_entry, zigpy_device_mock
 ) -> Callable[..., zha_core_device.ZHADevice]:
     """Return a ZHA Device factory."""
 
@@ -407,8 +426,11 @@ def zha_device_mock(
         zigpy_device = zigpy_device_mock(
             endpoints, ieee, manufacturer, model, node_desc, patch_cluster=patch_cluster
         )
-        zha_device = zha_core_device.ZHADevice(hass, zigpy_device, MagicMock())
-        return zha_device
+        return zha_core_device.ZHADevice(
+            hass,
+            zigpy_device,
+            ZHAGateway(hass, {}, config_entry),
+        )
 
     return _zha_device
 
@@ -498,3 +520,34 @@ def network_backup() -> zigpy.backups.NetworkBackup:
             },
         }
     )
+
+
+@pytest.fixture
+def core_rs(hass_storage: dict[str, Any]) -> Callable[[str, Any, dict[str, Any]], None]:
+    """Core.restore_state fixture."""
+
+    def _storage(entity_id: str, state: str, attributes: dict[str, Any]) -> None:
+        now = dt_util.utcnow().isoformat()
+
+        hass_storage[restore_state.STORAGE_KEY] = {
+            "version": restore_state.STORAGE_VERSION,
+            "key": restore_state.STORAGE_KEY,
+            "data": [
+                {
+                    "state": {
+                        "entity_id": entity_id,
+                        "state": str(state),
+                        "attributes": attributes,
+                        "last_changed": now,
+                        "last_updated": now,
+                        "context": {
+                            "id": "3c2243ff5f30447eb12e7348cfd5b8ff",
+                            "user_id": None,
+                        },
+                    },
+                    "last_seen": now,
+                }
+            ],
+        }
+
+    return _storage

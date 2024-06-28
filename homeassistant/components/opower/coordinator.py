@@ -1,6 +1,8 @@
 """Coordinator to handle Opower connections."""
+
 from datetime import datetime, timedelta
 import logging
+import socket
 from types import MappingProxyType
 from typing import Any, cast
 
@@ -23,10 +25,11 @@ from homeassistant.components.recorder.statistics import (
     statistics_during_period,
 )
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, UnitOfEnergy, UnitOfVolume
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import CONF_TOTP_SECRET, CONF_UTILITY, DOMAIN
 
@@ -51,12 +54,22 @@ class OpowerCoordinator(DataUpdateCoordinator[dict[str, Forecast]]):
             update_interval=timedelta(hours=12),
         )
         self.api = Opower(
-            aiohttp_client.async_get_clientsession(hass),
+            aiohttp_client.async_get_clientsession(hass, family=socket.AF_INET),
             entry_data[CONF_UTILITY],
             entry_data[CONF_USERNAME],
             entry_data[CONF_PASSWORD],
             entry_data.get(CONF_TOTP_SECRET),
         )
+
+        @callback
+        def _dummy_listener() -> None:
+            pass
+
+        # Force the coordinator to periodically update by registering at least one listener.
+        # Needed when the _async_update_data below returns {} for utilities that don't provide
+        # forecast, which results to no sensors added, no registered listeners, and thus
+        # _async_update_data not periodically getting called which is needed for _insert_statistics.
+        self.async_add_listener(_dummy_listener)
 
     async def _async_update_data(
         self,
@@ -71,6 +84,8 @@ class OpowerCoordinator(DataUpdateCoordinator[dict[str, Forecast]]):
             raise ConfigEntryAuthFailed from err
         forecasts: list[Forecast] = await self.api.async_get_forecast()
         _LOGGER.debug("Updating sensor data with: %s", forecasts)
+        # Because Opower provides historical usage/cost with a delay of a couple of days
+        # we need to insert data into statistics.
         await self._insert_statistics()
         return {forecast.account.utility_account_id: forecast for forecast in forecasts}
 
@@ -81,7 +96,9 @@ class OpowerCoordinator(DataUpdateCoordinator[dict[str, Forecast]]):
                 (
                     self.api.utility.subdomain(),
                     account.meter_type.name.lower(),
-                    account.utility_account_id,
+                    # Some utilities like AEP have "-" in their account id.
+                    # Replace it with "_" to avoid "Invalid statistic_id"
+                    account.utility_account_id.replace("-", "_"),
                 )
             )
             cost_statistic_id = f"{DOMAIN}:{id_prefix}_energy_cost"
@@ -93,17 +110,21 @@ class OpowerCoordinator(DataUpdateCoordinator[dict[str, Forecast]]):
             )
 
             last_stat = await get_instance(self.hass).async_add_executor_job(
-                get_last_statistics, self.hass, 1, consumption_statistic_id, True, set()
+                get_last_statistics, self.hass, 1, cost_statistic_id, True, set()
             )
             if not last_stat:
                 _LOGGER.debug("Updating statistic for the first time")
-                cost_reads = await self._async_get_all_cost_reads(account)
+                cost_reads = await self._async_get_cost_reads(
+                    account, self.api.utility.timezone()
+                )
                 cost_sum = 0.0
                 consumption_sum = 0.0
                 last_stats_time = None
             else:
-                cost_reads = await self._async_get_recent_cost_reads(
-                    account, last_stat[consumption_statistic_id][0]["start"]
+                cost_reads = await self._async_get_cost_reads(
+                    account,
+                    self.api.utility.timezone(),
+                    last_stat[cost_statistic_id][0]["start"],
                 )
                 if not cost_reads:
                     _LOGGER.debug("No recent usage/cost data. Skipping update")
@@ -143,13 +164,9 @@ class OpowerCoordinator(DataUpdateCoordinator[dict[str, Forecast]]):
                     )
                 )
 
-            name_prefix = " ".join(
-                (
-                    "Opower",
-                    self.api.utility.subdomain(),
-                    account.meter_type.name.lower(),
-                    account.utility_account_id,
-                )
+            name_prefix = (
+                f"Opower {self.api.utility.subdomain()} "
+                f"{account.meter_type.name.lower()} {account.utility_account_id}"
             )
             cost_metadata = StatisticMetaData(
                 has_mean=False,
@@ -175,59 +192,68 @@ class OpowerCoordinator(DataUpdateCoordinator[dict[str, Forecast]]):
                 self.hass, consumption_metadata, consumption_statistics
             )
 
-    async def _async_get_all_cost_reads(self, account: Account) -> list[CostRead]:
-        """Get all cost reads since account activation but at different resolutions depending on age.
+    async def _async_get_cost_reads(
+        self, account: Account, time_zone_str: str, start_time: float | None = None
+    ) -> list[CostRead]:
+        """Get cost reads.
 
+        If start_time is None, get cost reads since account activation,
+        otherwise since start_time - 30 days to allow corrections in data from utilities
+
+        We read at different resolutions depending on age:
         - month resolution for all years (since account activation)
         - day resolution for past 3 years (if account's read resolution supports it)
         - hour resolution for past 2 months (if account's read resolution supports it)
         """
-        cost_reads = []
 
-        start = None
-        end = datetime.now()
-        if account.read_resolution != ReadResolution.BILLING:
-            end -= timedelta(days=3 * 365)
-        cost_reads += await self.api.async_get_cost_reads(
+        def _update_with_finer_cost_reads(
+            cost_reads: list[CostRead], finer_cost_reads: list[CostRead]
+        ) -> None:
+            for i, cost_read in enumerate(cost_reads):
+                for j, finer_cost_read in enumerate(finer_cost_reads):
+                    if cost_read.start_time == finer_cost_read.start_time:
+                        cost_reads[i:] = finer_cost_reads[j:]
+                        return
+                    if cost_read.end_time == finer_cost_read.start_time:
+                        cost_reads[i + 1 :] = finer_cost_reads[j:]
+                        return
+                    if cost_read.end_time < finer_cost_read.start_time:
+                        break
+            cost_reads += finer_cost_reads
+
+        tz = await dt_util.async_get_time_zone(time_zone_str)
+        if start_time is None:
+            start = None
+        else:
+            start = datetime.fromtimestamp(start_time, tz=tz) - timedelta(days=30)
+        end = dt_util.now(tz)
+        cost_reads = await self.api.async_get_cost_reads(
             account, AggregateType.BILL, start, end
         )
         if account.read_resolution == ReadResolution.BILLING:
             return cost_reads
 
-        start = end if not cost_reads else cost_reads[-1].end_time
-        end = datetime.now()
-        if account.read_resolution != ReadResolution.DAY:
-            end -= timedelta(days=2 * 30)
-        cost_reads += await self.api.async_get_cost_reads(
+        if start_time is None:
+            start = end - timedelta(days=3 * 365)
+        else:
+            if cost_reads:
+                start = cost_reads[0].start_time
+            assert start
+            start = max(start, end - timedelta(days=3 * 365))
+        daily_cost_reads = await self.api.async_get_cost_reads(
             account, AggregateType.DAY, start, end
         )
+        _update_with_finer_cost_reads(cost_reads, daily_cost_reads)
         if account.read_resolution == ReadResolution.DAY:
             return cost_reads
 
-        start = end if not cost_reads else cost_reads[-1].end_time
-        end = datetime.now()
-        cost_reads += await self.api.async_get_cost_reads(
+        if start_time is None:
+            start = end - timedelta(days=2 * 30)
+        else:
+            assert start
+            start = max(start, end - timedelta(days=2 * 30))
+        hourly_cost_reads = await self.api.async_get_cost_reads(
             account, AggregateType.HOUR, start, end
         )
+        _update_with_finer_cost_reads(cost_reads, hourly_cost_reads)
         return cost_reads
-
-    async def _async_get_recent_cost_reads(
-        self, account: Account, last_stat_time: float
-    ) -> list[CostRead]:
-        """Get cost reads within the past 30 days to allow corrections in data from utilities."""
-        if account.read_resolution in [
-            ReadResolution.HOUR,
-            ReadResolution.HALF_HOUR,
-            ReadResolution.QUARTER_HOUR,
-        ]:
-            aggregate_type = AggregateType.HOUR
-        elif account.read_resolution == ReadResolution.DAY:
-            aggregate_type = AggregateType.DAY
-        else:
-            aggregate_type = AggregateType.BILL
-        return await self.api.async_get_cost_reads(
-            account,
-            aggregate_type,
-            datetime.fromtimestamp(last_stat_time) - timedelta(days=30),
-            datetime.now(),
-        )

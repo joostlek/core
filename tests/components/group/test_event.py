@@ -2,8 +2,11 @@
 
 from pytest_unordered import unordered
 
-from homeassistant.components.event import DOMAIN as EVENT_DOMAIN
-from homeassistant.components.event.const import ATTR_EVENT_TYPE, ATTR_EVENT_TYPES
+from homeassistant.components.event import (
+    ATTR_EVENT_TYPE,
+    ATTR_EVENT_TYPES,
+    DOMAIN as EVENT_DOMAIN,
+)
 from homeassistant.components.group import DOMAIN
 from homeassistant.const import (
     ATTR_DEVICE_CLASS,
@@ -16,7 +19,9 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 
 
-async def test_default_state(hass: HomeAssistant) -> None:
+async def test_default_state(
+    hass: HomeAssistant, entity_registry: er.EntityRegistry
+) -> None:
     """Test event group default state."""
     await async_setup_component(
         hass,
@@ -132,7 +137,6 @@ async def test_default_state(hass: HomeAssistant) -> None:
     assert state is not None
     assert state.state == STATE_UNAVAILABLE
 
-    entity_registry = er.async_get(hass)
     entry = entity_registry.async_get("event.remote_control")
     assert entry
     assert entry.unique_id == "unique_identifier"

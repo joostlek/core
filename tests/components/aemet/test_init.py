@@ -1,7 +1,8 @@
 """Define tests for the AEMET OpenData init."""
-import asyncio
+
 from unittest.mock import patch
 
+from aemet_opendata.exceptions import AemetTimeout
 from freezegun.api import FrozenDateTimeFactory
 
 from homeassistant.components.aemet.const import DOMAIN
@@ -27,7 +28,7 @@ async def test_unload_entry(
 ) -> None:
     """Test (un)loading the AEMET integration."""
 
-    hass.config.set_time_zone("UTC")
+    await hass.config.async_set_time_zone("UTC")
     freezer.move_to("2021-01-09 12:00:00+00:00")
     with patch(
         "homeassistant.components.aemet.AEMET.api_call",
@@ -53,7 +54,7 @@ async def test_init_town_not_found(
 ) -> None:
     """Test TownNotFound when loading the AEMET integration."""
 
-    hass.config.set_time_zone("UTC")
+    await hass.config.async_set_time_zone("UTC")
     freezer.move_to("2021-01-09 12:00:00+00:00")
     with patch(
         "homeassistant.components.aemet.AEMET.api_call",
@@ -79,11 +80,11 @@ async def test_init_api_timeout(
 ) -> None:
     """Test API timeouts when loading the AEMET integration."""
 
-    hass.config.set_time_zone("UTC")
+    await hass.config.async_set_time_zone("UTC")
     freezer.move_to("2021-01-09 12:00:00+00:00")
     with patch(
         "homeassistant.components.aemet.AEMET.api_call",
-        side_effect=asyncio.TimeoutError,
+        side_effect=AemetTimeout,
     ):
         config_entry = MockConfigEntry(
             domain=DOMAIN,

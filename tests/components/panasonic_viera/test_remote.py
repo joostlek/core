@@ -1,4 +1,5 @@
 """Test the Panasonic Viera remote entity."""
+
 from unittest.mock import Mock, call
 
 from panasonic_viera import Keys, SOAPError
@@ -12,7 +13,7 @@ from homeassistant.components.remote import (
 )
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import async_get as get_dev_reg
+from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
 
 from .conftest import MOCK_CONFIG_DATA, MOCK_DEVICE_INFO, MOCK_ENCRYPTION_DATA
@@ -43,7 +44,7 @@ async def test_onoff(hass: HomeAssistant, calls, mock_remote) -> None:
     entity_id = "remote.panasonic_viera_tv"
     data = {ATTR_ENTITY_ID: entity_id}
 
-    device_reg = get_dev_reg(hass)
+    device_reg = dr.async_get(hass)
     device = device_reg.async_get_device(identifiers={(DOMAIN, FAKE_UUID)})
 
     assert await async_setup_component(
@@ -90,7 +91,7 @@ async def test_onoff(hass: HomeAssistant, calls, mock_remote) -> None:
     await hass.services.async_call(REMOTE_DOMAIN, SERVICE_TURN_ON, data)
     await hass.async_block_till_done()
 
-    power = getattr(Keys.power, "value", Keys.power)
+    power = getattr(Keys.POWER, "value", Keys.POWER)
     assert mock_remote.send_key.call_args_list == [call(power)]
     assert len(calls) == 2
 

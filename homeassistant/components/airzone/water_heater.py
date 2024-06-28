@@ -1,4 +1,5 @@
 """Support for the Airzone water heater."""
+
 from __future__ import annotations
 
 from typing import Any, Final
@@ -9,7 +10,6 @@ from aioairzone.const import (
     API_ACS_POWER_MODE,
     API_ACS_SET_POINT,
     AZD_HOT_WATER,
-    AZD_NAME,
     AZD_OPERATION,
     AZD_OPERATIONS,
     AZD_TEMP,
@@ -30,7 +30,8 @@ from homeassistant.const import ATTR_TEMPERATURE, STATE_OFF
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, TEMP_UNIT_LIB_TO_HASS
+from . import AirzoneConfigEntry
+from .const import TEMP_UNIT_LIB_TO_HASS
 from .coordinator import AirzoneUpdateCoordinator
 from .entity import AirzoneHotWaterEntity
 
@@ -56,10 +57,12 @@ OPERATION_MODE_TO_DHW_PARAMS: Final[dict[str, dict[str, Any]]] = {
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: AirzoneConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Add Airzone sensors from a config_entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     if AZD_HOT_WATER in coordinator.data:
         async_add_entities([AirzoneWaterHeater(coordinator, entry)])
 
@@ -67,6 +70,7 @@ async def async_setup_entry(
 class AirzoneWaterHeater(AirzoneHotWaterEntity, WaterHeaterEntity):
     """Define an Airzone Water Heater."""
 
+    _attr_name = None
     _attr_supported_features = (
         WaterHeaterEntityFeature.TARGET_TEMPERATURE
         | WaterHeaterEntityFeature.ON_OFF
@@ -81,7 +85,6 @@ class AirzoneWaterHeater(AirzoneHotWaterEntity, WaterHeaterEntity):
         """Initialize Airzone water heater entity."""
         super().__init__(coordinator, entry)
 
-        self._attr_name = self.get_airzone_value(AZD_NAME)
         self._attr_unique_id = f"{self._attr_unique_id}_dhw"
         self._attr_operation_list = [
             OPERATION_LIB_TO_HASS[operation]

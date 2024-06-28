@@ -1,7 +1,11 @@
 """Tests for Shelly diagnostics platform."""
-from unittest.mock import ANY
+
+from unittest.mock import ANY, Mock, PropertyMock
 
 from aioshelly.ble.const import BLE_SCAN_RESULT_EVENT
+from aioshelly.const import MODEL_25
+from aioshelly.exceptions import DeviceConnectionError
+import pytest
 
 from homeassistant.components.diagnostics import REDACTED
 from homeassistant.components.shelly.const import (
@@ -22,7 +26,7 @@ RELAY_BLOCK_ID = 0
 
 
 async def test_block_config_entry_diagnostics(
-    hass: HomeAssistant, hass_client: ClientSessionGenerator, mock_block_device
+    hass: HomeAssistant, hass_client: ClientSessionGenerator, mock_block_device: Mock
 ) -> None:
     """Test config entry diagnostics for block device."""
     await init_integration(hass, 1)
@@ -33,6 +37,10 @@ async def test_block_config_entry_diagnostics(
         {key: REDACTED for key in TO_REDACT if key in entry_dict["data"]}
     )
 
+    type(mock_block_device).last_error = PropertyMock(
+        return_value=DeviceConnectionError()
+    )
+
     result = await get_diagnostics_for_config_entry(hass, hass_client, entry)
 
     assert result == {
@@ -40,19 +48,20 @@ async def test_block_config_entry_diagnostics(
         "bluetooth": "not initialized",
         "device_info": {
             "name": "Test name",
-            "model": "SHSW-25",
+            "model": MODEL_25,
             "sw_version": "some fw string",
         },
         "device_settings": {"coiot": {"update_period": 15}},
         "device_status": MOCK_STATUS_COAP,
+        "last_error": "DeviceConnectionError()",
     }
 
 
 async def test_rpc_config_entry_diagnostics(
     hass: HomeAssistant,
     hass_client: ClientSessionGenerator,
-    mock_rpc_device,
-    monkeypatch,
+    mock_rpc_device: Mock,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test config entry diagnostics for rpc device."""
     await init_integration(
@@ -86,6 +95,10 @@ async def test_rpc_config_entry_diagnostics(
     entry_dict = entry.as_dict()
     entry_dict["data"].update(
         {key: REDACTED for key in TO_REDACT if key in entry_dict["data"]}
+    )
+
+    type(mock_rpc_device).last_error = PropertyMock(
+        return_value=DeviceConnectionError()
     )
 
     result = await get_diagnostics_for_config_entry(hass, hass_client, entry)
@@ -129,14 +142,13 @@ async def test_rpc_config_entry_diagnostics(
                 "scanning": True,
                 "start_time": ANY,
                 "source": "12:34:56:78:9A:BC",
-                "storage": None,
                 "time_since_last_device_detection": {"AA:BB:CC:DD:EE:FF": ANY},
                 "type": "ShellyBLEScanner",
             }
         },
         "device_info": {
             "name": "Test name",
-            "model": "SHSW-25",
+            "model": MODEL_25,
             "sw_version": "some fw string",
         },
         "device_settings": {},
@@ -145,8 +157,10 @@ async def test_rpc_config_entry_diagnostics(
                 "available_updates": {
                     "beta": {"version": "some_beta_version"},
                     "stable": {"version": "some_beta_version"},
-                }
+                },
+                "relay_in_thermostat": True,
             },
             "wifi": {"rssi": -63},
         },
+        "last_error": "DeviceConnectionError()",
     }

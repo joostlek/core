@@ -1,18 +1,17 @@
 """Component for handling incoming events as a platform."""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
+from functools import cached_property
 import logging
 from typing import Any, Self, final
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.config_validation import (  # noqa: F401
-    PLATFORM_SCHEMA,
-    PLATFORM_SCHEMA_BASE,
-)
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
@@ -21,11 +20,11 @@ from homeassistant.util import dt as dt_util
 
 from .const import ATTR_EVENT_TYPE, ATTR_EVENT_TYPES, DOMAIN
 
-SCAN_INTERVAL = timedelta(seconds=30)
-
-ENTITY_ID_FORMAT = DOMAIN + ".{}"
-
 _LOGGER = logging.getLogger(__name__)
+ENTITY_ID_FORMAT = DOMAIN + ".{}"
+PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA
+PLATFORM_SCHEMA_BASE = cv.PLATFORM_SCHEMA_BASE
+SCAN_INTERVAL = timedelta(seconds=30)
 
 
 class EventDeviceClass(StrEnum):
@@ -71,8 +70,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return await component.async_unload_entry(entry)
 
 
-@dataclass
-class EventEntityDescription(EntityDescription):
+class EventEntityDescription(EntityDescription, frozen_or_thawed=True):
     """A class that describes event entities."""
 
     device_class: EventDeviceClass | None = None
@@ -102,7 +100,13 @@ class EventExtraStoredData(ExtraStoredData):
             return None
 
 
-class EventEntity(RestoreEntity):
+CACHED_PROPERTIES_WITH_ATTR_ = {
+    "device_class",
+    "event_types",
+}
+
+
+class EventEntity(RestoreEntity, cached_properties=CACHED_PROPERTIES_WITH_ATTR_):
     """Representation of an Event entity."""
 
     _entity_component_unrecorded_attributes = frozenset({ATTR_EVENT_TYPES})
@@ -116,7 +120,7 @@ class EventEntity(RestoreEntity):
     __last_event_type: str | None = None
     __last_event_attributes: dict[str, Any] | None = None
 
-    @property
+    @cached_property
     def device_class(self) -> EventDeviceClass | None:
         """Return the class of this entity."""
         if hasattr(self, "_attr_device_class"):
@@ -125,7 +129,7 @@ class EventEntity(RestoreEntity):
             return self.entity_description.device_class
         return None
 
-    @property
+    @cached_property
     def event_types(self) -> list[str]:
         """Return a list of possible events."""
         if hasattr(self, "_attr_event_types"):
@@ -135,7 +139,7 @@ class EventEntity(RestoreEntity):
             and self.entity_description.event_types is not None
         ):
             return self.entity_description.event_types
-        raise AttributeError()
+        raise AttributeError
 
     @final
     def _trigger_event(

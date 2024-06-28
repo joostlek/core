@@ -1,8 +1,10 @@
 """Read the balance of your bank accounts via FinTS."""
+
 from __future__ import annotations
 
 from collections import namedtuple
 from datetime import timedelta
+from functools import cached_property
 import logging
 from typing import Any
 
@@ -10,8 +12,10 @@ from fints.client import FinTS3PinTanClient
 from fints.models import SEPAAccount
 import voluptuous as vol
 
-from homeassistant.backports.functools import cached_property
-from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
+from homeassistant.components.sensor import (
+    PLATFORM_SCHEMA as SENSOR_PLATFORM_SCHEMA,
+    SensorEntity,
+)
 from homeassistant.const import CONF_NAME, CONF_PIN, CONF_URL, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
@@ -42,7 +46,7 @@ SCHEMA_ACCOUNTS = vol.Schema(
     }
 )
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = SENSOR_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_BIN): cv.string,
         vol.Required(CONF_USERNAME): cv.string,
@@ -168,14 +172,13 @@ class FinTsClient:
         if not account_information:
             return False
 
-        if not account_information["type"]:
-            # bank does not support account types, use value from config
-            if (
-                account_information["iban"] in self.account_config
-                or account_information["account_number"] in self.account_config
-            ):
-                return True
-        elif 1 <= account_information["type"] <= 9:
+        if account_type := account_information.get("type"):
+            return 1 <= account_type <= 9
+
+        if (
+            account_information["iban"] in self.account_config
+            or account_information["account_number"] in self.account_config
+        ):
             return True
 
         return False
@@ -189,14 +192,13 @@ class FinTsClient:
         if not account_information:
             return False
 
-        if not account_information["type"]:
-            # bank does not support account types, use value from config
-            if (
-                account_information["iban"] in self.holdings_config
-                or account_information["account_number"] in self.holdings_config
-            ):
-                return True
-        elif 30 <= account_information["type"] <= 39:
+        if account_type := account_information.get("type"):
+            return 30 <= account_type <= 39
+
+        if (
+            account_information["iban"] in self.holdings_config
+            or account_information["account_number"] in self.holdings_config
+        ):
             return True
 
         return False
@@ -215,7 +217,11 @@ class FinTsClient:
                 holdings_accounts.append(account)
 
             else:
-                _LOGGER.warning("Could not determine type of account %s", account.iban)
+                _LOGGER.warning(
+                    "Could not determine type of account %s from %s",
+                    account.iban,
+                    self.client.user_id,
+                )
 
         return balance_accounts, holdings_accounts
 

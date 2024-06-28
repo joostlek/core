@@ -1,4 +1,5 @@
 """Unit tests for the Todoist calendar platform."""
+
 from datetime import timedelta
 from http import HTTPStatus
 from typing import Any
@@ -6,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import urllib
 import zoneinfo
 
+from freezegun.api import FrozenDateTimeFactory
 import pytest
 from todoist_api_python.models import Due
 
@@ -18,13 +20,13 @@ from homeassistant.components.todoist.const import (
     PROJECT_NAME,
     SERVICE_NEW_TASK,
 )
-from homeassistant.const import CONF_TOKEN
+from homeassistant.const import CONF_TOKEN, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_component import async_update_entity
 from homeassistant.util import dt as dt_util
 
-from .conftest import SUMMARY
+from .conftest import PROJECT_ID, SUMMARY
 
 from tests.typing import ClientSessionGenerator
 
@@ -35,9 +37,15 @@ TIMEZONE = zoneinfo.ZoneInfo(TZ_NAME)
 
 
 @pytest.fixture(autouse=True)
-def set_time_zone(hass: HomeAssistant):
+def platforms() -> list[Platform]:
+    """Override platforms."""
+    return [Platform.CALENDAR]
+
+
+@pytest.fixture(autouse=True)
+async def set_time_zone(hass: HomeAssistant):
     """Set the time zone for the tests."""
-    hass.config.set_time_zone(TZ_NAME)
+    await hass.config.async_set_time_zone(TZ_NAME)
 
 
 def get_events_url(entity: str, start: str, end: str) -> str:
@@ -97,7 +105,7 @@ async def test_calendar_entity_unique_id(
 ) -> None:
     """Test unique id is set to project id."""
     entity = entity_registry.async_get("calendar.name")
-    assert entity.unique_id == "12345"
+    assert entity.unique_id == PROJECT_ID
 
 
 @pytest.mark.parametrize(
@@ -139,6 +147,7 @@ async def test_update_entity_for_custom_project_no_due_date_on(
 )
 async def test_update_entity_for_calendar_with_due_date_in_the_future(
     hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
     api: AsyncMock,
 ) -> None:
     """Test that a task with a due date in the future has on state and correct end_time."""
@@ -256,7 +265,7 @@ async def test_create_task_service_call(hass: HomeAssistant, api: AsyncMock) -> 
     await hass.async_block_till_done()
 
     api.add_task.assert_called_with(
-        "task", project_id="12345", labels=["Label1"], assignee_id="1"
+        "task", project_id=PROJECT_ID, labels=["Label1"], assignee_id="1"
     )
 
 
@@ -355,6 +364,73 @@ async def test_task_due_datetime(
     )
     assert response.status == HTTPStatus.OK
     assert await response.json() == []
+
+
+@pytest.mark.parametrize(
+    ("todoist_config", "due", "start", "end", "expected_response"),
+    [
+        (
+            {"custom_projects": [{"name": "Test", "labels": ["Label1"]}]},
+            Due(date="2023-03-30", is_recurring=False, string="Mar 30"),
+            "2023-03-28T00:00:00.000Z",
+            "2023-04-01T00:00:00.000Z",
+            [get_events_response({"date": "2023-03-30"}, {"date": "2023-03-31"})],
+        ),
+        (
+            {"custom_projects": [{"name": "Test", "labels": ["custom"]}]},
+            Due(date="2023-03-30", is_recurring=False, string="Mar 30"),
+            "2023-03-28T00:00:00.000Z",
+            "2023-04-01T00:00:00.000Z",
+            [],
+        ),
+        (
+            {"custom_projects": [{"name": "Test", "include_projects": ["Name"]}]},
+            Due(date="2023-03-30", is_recurring=False, string="Mar 30"),
+            "2023-03-28T00:00:00.000Z",
+            "2023-04-01T00:00:00.000Z",
+            [get_events_response({"date": "2023-03-30"}, {"date": "2023-03-31"})],
+        ),
+        (
+            {"custom_projects": [{"name": "Test", "due_date_days": 1}]},
+            Due(date="2023-03-30", is_recurring=False, string="Mar 30"),
+            "2023-03-28T00:00:00.000Z",
+            "2023-04-01T00:00:00.000Z",
+            [get_events_response({"date": "2023-03-30"}, {"date": "2023-03-31"})],
+        ),
+        (
+            {"custom_projects": [{"name": "Test", "due_date_days": 1}]},
+            Due(
+                date=(dt_util.now() + timedelta(days=2)).strftime("%Y-%m-%d"),
+                is_recurring=False,
+                string="Mar 30",
+            ),
+            dt_util.now().isoformat(),
+            (dt_util.now() + timedelta(days=5)).isoformat(),
+            [],
+        ),
+    ],
+    ids=[
+        "in_labels_whitelist",
+        "not_in_labels_whitelist",
+        "in_include_projects",
+        "in_due_date_days",
+        "not_in_due_date_days",
+    ],
+)
+async def test_events_filtered_for_custom_projects(
+    hass: HomeAssistant,
+    hass_client: ClientSessionGenerator,
+    start: str,
+    end: str,
+    expected_response: dict[str, Any],
+) -> None:
+    """Test we filter out tasks from custom projects based on their config."""
+    client = await hass_client()
+    response = await client.get(
+        get_events_url("calendar.test", start, end),
+    )
+    assert response.status == HTTPStatus.OK
+    assert await response.json() == expected_response
 
 
 @pytest.mark.parametrize(
