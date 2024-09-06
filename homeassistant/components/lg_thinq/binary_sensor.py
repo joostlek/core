@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 
 from thinqconnect import DeviceType
@@ -17,31 +18,44 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import ThinqConfigEntry
 from .entity import ThinQEntity
 
-BINARY_SENSOR_DESC: dict[ThinQProperty, BinarySensorEntityDescription] = {
-    ThinQProperty.RINSE_REFILL: BinarySensorEntityDescription(
+
+@dataclass(frozen=True, kw_only=True)
+class ThinQBinarySensorEntityDescription(BinarySensorEntityDescription):
+    """Describes ThinQ binary sensor entity."""
+
+    on_key: str | None = None
+
+
+BINARY_SENSOR_DESC: dict[ThinQProperty, ThinQBinarySensorEntityDescription] = {
+    ThinQProperty.RINSE_REFILL: ThinQBinarySensorEntityDescription(
         key=ThinQProperty.RINSE_REFILL,
         translation_key=ThinQProperty.RINSE_REFILL,
     ),
-    ThinQProperty.ECO_FRIENDLY_MODE: BinarySensorEntityDescription(
+    ThinQProperty.ECO_FRIENDLY_MODE: ThinQBinarySensorEntityDescription(
         key=ThinQProperty.ECO_FRIENDLY_MODE,
         translation_key=ThinQProperty.ECO_FRIENDLY_MODE,
     ),
-    ThinQProperty.POWER_SAVE_ENABLED: BinarySensorEntityDescription(
+    ThinQProperty.POWER_SAVE_ENABLED: ThinQBinarySensorEntityDescription(
         key=ThinQProperty.POWER_SAVE_ENABLED,
         translation_key=ThinQProperty.POWER_SAVE_ENABLED,
     ),
-    ThinQProperty.REMOTE_CONTROL_ENABLED: BinarySensorEntityDescription(
+    ThinQProperty.REMOTE_CONTROL_ENABLED: ThinQBinarySensorEntityDescription(
         key=ThinQProperty.REMOTE_CONTROL_ENABLED,
         translation_key=ThinQProperty.REMOTE_CONTROL_ENABLED,
     ),
-    ThinQProperty.SABBATH_MODE: BinarySensorEntityDescription(
+    ThinQProperty.SABBATH_MODE: ThinQBinarySensorEntityDescription(
         key=ThinQProperty.SABBATH_MODE,
         translation_key=ThinQProperty.SABBATH_MODE,
+    ),
+    ThinQProperty.HOOD_OPERATION_MODE: ThinQBinarySensorEntityDescription(
+        key=ThinQProperty.HOOD_OPERATION_MODE,
+        translation_key=ThinQProperty.HOOD_OPERATION_MODE,
+        on_key="ON",
     ),
 }
 
 DEVICE_TYPE_BINARY_SENSOR_MAP: dict[
-    DeviceType, tuple[BinarySensorEntityDescription, ...]
+    DeviceType, tuple[ThinQBinarySensorEntityDescription, ...]
 ] = {
     DeviceType.COOKTOP: (BINARY_SENSOR_DESC[ThinQProperty.REMOTE_CONTROL_ENABLED],),
     DeviceType.DISH_WASHER: (
@@ -49,6 +63,7 @@ DEVICE_TYPE_BINARY_SENSOR_MAP: dict[
         BINARY_SENSOR_DESC[ThinQProperty.REMOTE_CONTROL_ENABLED],
     ),
     DeviceType.DRYER: (BINARY_SENSOR_DESC[ThinQProperty.REMOTE_CONTROL_ENABLED],),
+    DeviceType.HOOD: (BINARY_SENSOR_DESC[ThinQProperty.HOOD_OPERATION_MODE],),
     DeviceType.OVEN: (BINARY_SENSOR_DESC[ThinQProperty.REMOTE_CONTROL_ENABLED],),
     DeviceType.REFRIGERATOR: (
         BINARY_SENSOR_DESC[ThinQProperty.ECO_FRIENDLY_MODE],
@@ -101,6 +116,8 @@ async def async_setup_entry(
 class ThinQBinarySensorEntity(ThinQEntity, BinarySensorEntity):
     """Represent a thinq binary sensor platform."""
 
+    entity_description: ThinQBinarySensorEntityDescription
+
     def _update_status(self) -> None:
         """Update status itself."""
         super()._update_status()
@@ -111,4 +128,7 @@ class ThinQBinarySensorEntity(ThinQEntity, BinarySensorEntity):
             self.property_id,
             self.data.is_on,
         )
-        self._attr_is_on = self.data.is_on
+        if self.entity_description.on_key is not None:
+            self._attr_is_on = self.data.value == self.entity_description.on_key
+        else:
+            self._attr_is_on = self.data.is_on
