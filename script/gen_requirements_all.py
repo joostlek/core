@@ -241,6 +241,10 @@ async-timeout==4.0.3
 # https://github.com/home-assistant/core/issues/122508
 # https://github.com/home-assistant/core/issues/118004
 aiofiles>=24.1.0
+
+# slixmpp 1.9.0 requires a new version of rust to compile wheels
+# and the wheels builder doesn't have this yet.
+slixmpp<1.9.0
 """
 
 GENERATED_MESSAGE = (
