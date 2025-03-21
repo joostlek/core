@@ -19,6 +19,7 @@ from pysmartthings import (
     SmartThingsSinkError,
     Status,
 )
+from pysmartthings.models import Lifecycle
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -178,7 +179,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartThingsConfigEntry) 
         raise ConfigEntryAuthFailed from err
 
     device_registry = dr.async_get(hass)
-    create_devices(device_registry, device_status, entry, rooms)
+    for device in device_status.values():
+        create_device(device_registry, device, entry.entry_id, rooms)
+
+    async def new_device_callback(device_id: str) -> None:
+        """Handle a new device."""
+        device = await client.get_device(device_id)
+        status = process_status(await client.get_device_status(device_id))
+        device_status[device_id] = full_device = FullDevice(
+            device=device, status=status
+        )
+        create_device(device_registry, full_device, entry.entry_id, rooms)
+
+    entry.async_on_unload(
+        client.add_device_lifecycle_event_listener(
+            Lifecycle.CREATE, new_device_callback
+        )
+    )
 
     scenes = {
         scene.scene_id: scene
@@ -267,56 +284,60 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-def create_devices(
+def create_device(
     device_registry: dr.DeviceRegistry,
-    devices: dict[str, FullDevice],
-    entry: SmartThingsConfigEntry,
+    device: FullDevice,
+    entry_id: str,
     rooms: dict[str, str],
 ) -> None:
     """Create devices in the device registry."""
-    for device in devices.values():
-        kwargs: dict[str, Any] = {}
-        if device.device.hub is not None:
-            kwargs = {
-                ATTR_SW_VERSION: device.device.hub.firmware_version,
-                ATTR_MODEL: device.device.hub.hardware_type,
+    device_registry.async_get_or_create(
+        config_entry_id=entry_id,
+        identifiers={(DOMAIN, device.device.device_id)},
+        configuration_url="https://account.smartthings.com",
+        name=device.device.label,
+        suggested_area=(
+            rooms.get(device.device.room_id) if device.device.room_id else None
+        ),
+        **_get_device_attributes(device),
+    )
+
+
+def _get_device_attributes(device: FullDevice) -> dict[str, Any]:
+    """Get device attributes for the device registry."""
+    kwargs: dict[str, Any] = {}
+    if device.device.hub is not None:
+        kwargs = {
+            ATTR_SW_VERSION: device.device.hub.firmware_version,
+            ATTR_MODEL: device.device.hub.hardware_type,
+        }
+        if device.device.hub.mac_address:
+            kwargs[ATTR_CONNECTIONS] = {
+                (dr.CONNECTION_NETWORK_MAC, device.device.hub.mac_address)
             }
-            if device.device.hub.mac_address:
-                kwargs[ATTR_CONNECTIONS] = {
-                    (dr.CONNECTION_NETWORK_MAC, device.device.hub.mac_address)
-                }
-        if device.device.parent_device_id:
-            kwargs[ATTR_VIA_DEVICE] = (DOMAIN, device.device.parent_device_id)
-        if (ocf := device.device.ocf) is not None:
-            kwargs.update(
-                {
-                    ATTR_MANUFACTURER: ocf.manufacturer_name,
-                    ATTR_MODEL: (
-                        (ocf.model_number.split("|")[0]) if ocf.model_number else None
-                    ),
-                    ATTR_HW_VERSION: ocf.hardware_version,
-                    ATTR_SW_VERSION: ocf.firmware_version,
-                }
-            )
-        if (viper := device.device.viper) is not None:
-            kwargs.update(
-                {
-                    ATTR_MANUFACTURER: viper.manufacturer_name,
-                    ATTR_MODEL: viper.model_name,
-                    ATTR_HW_VERSION: viper.hardware_version,
-                    ATTR_SW_VERSION: viper.software_version,
-                }
-            )
-        device_registry.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={(DOMAIN, device.device.device_id)},
-            configuration_url="https://account.smartthings.com",
-            name=device.device.label,
-            suggested_area=(
-                rooms.get(device.device.room_id) if device.device.room_id else None
-            ),
-            **kwargs,
+    if device.device.parent_device_id:
+        kwargs[ATTR_VIA_DEVICE] = (DOMAIN, device.device.parent_device_id)
+    if (ocf := device.device.ocf) is not None:
+        kwargs.update(
+            {
+                ATTR_MANUFACTURER: ocf.manufacturer_name,
+                ATTR_MODEL: (
+                    (ocf.model_number.split("|")[0]) if ocf.model_number else None
+                ),
+                ATTR_HW_VERSION: ocf.hardware_version,
+                ATTR_SW_VERSION: ocf.firmware_version,
+            }
         )
+    if (viper := device.device.viper) is not None:
+        kwargs.update(
+            {
+                ATTR_MANUFACTURER: viper.manufacturer_name,
+                ATTR_MODEL: viper.model_name,
+                ATTR_HW_VERSION: viper.hardware_version,
+                ATTR_SW_VERSION: viper.software_version,
+            }
+        )
+    return kwargs
 
 
 KEEP_CAPABILITY_QUIRK: dict[
