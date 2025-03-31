@@ -484,12 +484,10 @@ def process_status(status: dict[str, ComponentStatus]) -> dict[str, ComponentSta
     ) is not None:
         disabled_components = cast(
             list[str],
-            disabled_components_capability[Attribute.DISABLED_COMPONENTS].value,
+            disabled_components_capability[Attribute.DISABLED_COMPONENTS].value or [],
         )
-        if disabled_components is not None:
-            for component in disabled_components:
-                if component in status:
-                    del status[component]
+        for component in disabled_components:
+            status.pop(component, None)
     for component_status in status.values():
         process_component_status(component_status)
     return status
@@ -504,12 +502,11 @@ def process_component_status(status: ComponentStatus) -> None:
     ) is not None:
         disabled_capabilities = cast(
             list[Capability | str],
-            disabled_capabilities_capability[Attribute.DISABLED_CAPABILITIES].value,
+            disabled_capabilities_capability[Attribute.DISABLED_CAPABILITIES].value
+            or [],
         )
-        if disabled_capabilities is not None:
-            for capability in disabled_capabilities:
-                if capability in status and (
-                    capability not in KEEP_CAPABILITY_QUIRK
-                    or not KEEP_CAPABILITY_QUIRK[capability](status[capability])
-                ):
-                    del status[capability]
+        for capability in disabled_capabilities:
+            if capability not in KEEP_CAPABILITY_QUIRK or not KEEP_CAPABILITY_QUIRK[
+                capability
+            ](status[capability]):
+                status.pop(capability, None)
