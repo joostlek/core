@@ -18,22 +18,40 @@ from homeassistant.components.media_player import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
 )
+from homeassistant.config_entries import SOURCE_IMPORT
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT, CONF_TYPE
-from homeassistant.core import HomeAssistant
+from homeassistant.core import (
+    CALLBACK_TYPE,
+    DOMAIN as HOMEASSISTANT_DOMAIN,
+    HomeAssistant,
+)
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers import config_validation as cv, entity_platform
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import (
+    AddConfigEntryEntitiesCallback,
+    AddEntitiesCallback,
+)
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+
+from . import KEFConfigEntry
+from .const import (
+    CONF_INVERSE_SPEAKER_MODE,
+    CONF_MAX_VOLUME,
+    CONF_STANDBY_TIME,
+    CONF_SUPPORTS_ON,
+    CONF_VOLUME_STEP,
+    DEFAULT_INVERSE_SPEAKER_MODE,
+    DEFAULT_MAX_VOLUME,
+    DEFAULT_NAME,
+    DEFAULT_PORT,
+    DEFAULT_SUPPORTS_ON,
+    DEFAULT_VOLUME_STEP,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_NAME = "KEF"
-DEFAULT_PORT = 50001
-DEFAULT_MAX_VOLUME = 0.5
-DEFAULT_VOLUME_STEP = 0.05
-DEFAULT_INVERSE_SPEAKER_MODE = False
-DEFAULT_SUPPORTS_ON = True
 
 DOMAIN = "kef"
 
@@ -41,12 +59,6 @@ SCAN_INTERVAL = timedelta(seconds=30)
 
 SOURCES = {"LSX": ["Wifi", "Bluetooth", "Aux", "Opt"]}
 SOURCES["LS50"] = SOURCES["LSX"] + ["Usb"]
-
-CONF_MAX_VOLUME = "maximum_volume"
-CONF_VOLUME_STEP = "volume_step"
-CONF_INVERSE_SPEAKER_MODE = "inverse_speaker_mode"
-CONF_SUPPORTS_ON = "supports_on"
-CONF_STANDBY_TIME = "standby_time"
 
 SERVICE_MODE = "set_mode"
 SERVICE_DESK_DB = "set_desk_db"
@@ -95,30 +107,8 @@ async def async_setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the KEF platform."""
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
 
     host = config[CONF_HOST]
-    speaker_type = config[CONF_TYPE]
-    port = config[CONF_PORT]
-    name = config[CONF_NAME]
-    maximum_volume = config[CONF_MAX_VOLUME]
-    volume_step = config[CONF_VOLUME_STEP]
-    inverse_speaker_mode = config[CONF_INVERSE_SPEAKER_MODE]
-    supports_on = config[CONF_SUPPORTS_ON]
-    standby_time = config.get(CONF_STANDBY_TIME)
-
-    sources = SOURCES[speaker_type]
-
-    _LOGGER.debug(
-        "Setting up %s with host: %s, port: %s, name: %s, sources: %s",
-        DOMAIN,
-        host,
-        port,
-        name,
-        sources,
-    )
-
     mode = get_ip_mode(host)
     mac = await hass.async_add_executor_job(partial(get_mac_address, **{mode: host}))
     if mac is None or mac == "00:00:00:00:00:00":
@@ -126,26 +116,50 @@ async def async_setup_platform(
 
     unique_id = f"kef-{mac}"
 
-    media_player = KefMediaPlayer(
-        name,
-        host,
-        port,
-        maximum_volume,
-        volume_step,
-        standby_time,
-        inverse_speaker_mode,
-        supports_on,
-        sources,
-        speaker_type,
-        loop=hass.loop,
-        unique_id=unique_id,
+    hass.async_create_task(
+        hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_IMPORT},
+            data={**config, "unique_id": unique_id},
+        )
     )
 
-    if host in hass.data[DOMAIN]:
-        _LOGGER.debug("%s is already configured", host)
-    else:
-        hass.data[DOMAIN][host] = media_player
-        async_add_entities([media_player], update_before_add=True)
+    async_create_issue(
+        hass,
+        HOMEASSISTANT_DOMAIN,
+        f"deprecated_yaml_{DOMAIN}",
+        breaks_in_ha_version="2026.1.0",
+        is_fixable=False,
+        issue_domain=DOMAIN,
+        severity=IssueSeverity.WARNING,
+        translation_key="deprecated_yaml",
+        translation_placeholders={
+            "domain": DOMAIN,
+            "integration_title": "KEF",
+        },
+    )
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: KEFConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up the platform from a config entry."""
+    client = entry.runtime_data
+
+    async_add_entities(
+        [
+            KefMediaPlayer(
+                client,
+                entry.title,
+                entry.options[CONF_SUPPORTS_ON],
+                SOURCES[entry.data[CONF_TYPE]],
+                entry.data[CONF_TYPE],
+                entry.entry_id,
+            )
+        ]
+    )
 
     platform = entity_platform.async_get_current_platform()
 
@@ -191,38 +205,24 @@ class KefMediaPlayer(MediaPlayerEntity):
 
     def __init__(
         self,
-        name,
-        host,
-        port,
-        maximum_volume,
-        volume_step,
-        standby_time,
-        inverse_speaker_mode,
-        supports_on,
-        sources,
-        speaker_type,
-        loop,
-        unique_id,
-    ):
+        speaker: AsyncKefSpeaker,
+        name: str,
+        supports_on: bool,
+        sources: list[str],
+        speaker_type: str,
+        unique_id: str,
+    ) -> None:
         """Initialize the media player."""
         self._attr_name = name
         self._attr_source_list = sources
-        self._speaker = AsyncKefSpeaker(
-            host,
-            port,
-            volume_step,
-            maximum_volume,
-            standby_time,
-            inverse_speaker_mode,
-            loop=loop,
-        )
+        self._speaker = speaker
         self._attr_unique_id = unique_id
         self._supports_on = supports_on
         self._speaker_type = speaker_type
 
         self._attr_available = False
         self._dsp = None
-        self._update_dsp_task_remover = None
+        self._update_dsp_task_remover: CALLBACK_TYPE = None
 
         self._attr_supported_features = (
             MediaPlayerEntityFeature.VOLUME_SET

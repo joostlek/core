@@ -2,6 +2,7 @@
   "domain": "kef",
   "name": "KEF",
   "codeowners": ["@basnijholt"],
+  "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/kef",
   "iot_class": "local_polling",
   "loggers": ["aiokef", "tenacity"],

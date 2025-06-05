@@ -270,6 +270,9 @@ aioimmich==0.8.0
 # homeassistant.components.apache_kafka
 aiokafka==0.10.0
 
+# homeassistant.components.kef
+aiokef==0.2.16
+
 # homeassistant.components.rehlko
 aiokem==0.5.12
 
