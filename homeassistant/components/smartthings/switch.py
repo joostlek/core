@@ -203,15 +203,8 @@ async def async_setup_entry(
             )
             dhw = Capability.SAMSUNG_CE_EHS_FSV_SETTINGS in device.status[MAIN]
             if media_player or appliance or dhw:
-                if appliance:
-                    issue = "appliance"
-                    version = "2025.10.0"
-                elif media_player:
-                    issue = "media_player"
-                    version = "2025.10.0"
-                else:
-                    issue = "dhw"
-                    version = "2025.12.0"
+                issue = "dhw"
+                version = "2025.12.0"
                 if deprecate_entity(
                     hass,
                     entity_registry,

@@ -217,11 +217,7 @@ CAPABILITY_TO_SENSORS: dict[
                 key=Attribute.VOLUME,
                 translation_key="audio_volume",
                 native_unit_of_measurement=PERCENTAGE,
-                deprecated=(
-                    lambda status: ("2025.10.0", "media_player")
-                    if Capability.AUDIO_MUTE in status
-                    else None
-                ),
+                capability_ignore_list=[{Capability.AUDIO_MUTE}],
             )
         ]
     },
@@ -549,55 +545,6 @@ CAPABILITY_TO_SENSORS: dict[
                 translation_key="infrared_level",
                 native_unit_of_measurement=PERCENTAGE,
                 state_class=SensorStateClass.MEASUREMENT,
-            )
-        ]
-    },
-    Capability.MEDIA_INPUT_SOURCE: {
-        Attribute.INPUT_SOURCE: [
-            SmartThingsSensorEntityDescription(
-                key=Attribute.INPUT_SOURCE,
-                translation_key="media_input_source",
-                device_class=SensorDeviceClass.ENUM,
-                options_attribute=Attribute.SUPPORTED_INPUT_SOURCES,
-                value_fn=lambda value: value.lower() if value else None,
-                deprecated=lambda _: ("2025.10.0", "media_player"),
-            )
-        ]
-    },
-    Capability.MEDIA_PLAYBACK_REPEAT: {
-        Attribute.PLAYBACK_REPEAT_MODE: [
-            SmartThingsSensorEntityDescription(
-                key=Attribute.PLAYBACK_REPEAT_MODE,
-                translation_key="media_playback_repeat",
-                deprecated=lambda _: ("2025.10.0", "media_player"),
-            )
-        ]
-    },
-    Capability.MEDIA_PLAYBACK_SHUFFLE: {
-        Attribute.PLAYBACK_SHUFFLE: [
-            SmartThingsSensorEntityDescription(
-                key=Attribute.PLAYBACK_SHUFFLE,
-                translation_key="media_playback_shuffle",
-                deprecated=lambda _: ("2025.10.0", "media_player"),
-            )
-        ]
-    },
-    Capability.MEDIA_PLAYBACK: {
-        Attribute.PLAYBACK_STATUS: [
-            SmartThingsSensorEntityDescription(
-                key=Attribute.PLAYBACK_STATUS,
-                translation_key="media_playback_status",
-                options=[
-                    "paused",
-                    "playing",
-                    "stopped",
-                    "fast_forwarding",
-                    "rewinding",
-                    "buffering",
-                ],
-                device_class=SensorDeviceClass.ENUM,
-                value_fn=lambda value: MEDIA_PLAYBACK_STATE_MAP.get(value, value),
-                deprecated=lambda _: ("2025.10.0", "media_player"),
             )
         ]
     },
