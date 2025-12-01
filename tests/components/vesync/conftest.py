@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from contextlib import ExitStack
 from itertools import chain
 from types import MappingProxyType
+from typing import Generator
 from unittest.mock import AsyncMock, MagicMock, Mock, PropertyMock, patch
 
 import pytest
@@ -29,6 +30,18 @@ from .common import DEVICE_CATEGORIES, mock_multiple_device_responses
 
 from tests.common import MockConfigEntry
 from tests.test_util.aiohttp import AiohttpClientMocker
+
+
+@pytest.fixture
+def mock_vesync() -> Generator[AsyncMock, None, None]:
+    """Patch VeSync library."""
+    with (
+        patch("homeassistant.components.vesync.Vesync", autospec=True) as mock_vesync,
+        patch("homeassistant.components.vesync.config_flow.Vesync", new=mock_vesync)
+    ):
+        client = mock_vesync.return_value
+
+        yield client
 
 
 @pytest.fixture(autouse=True)
