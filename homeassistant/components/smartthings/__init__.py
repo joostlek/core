@@ -517,6 +517,17 @@ def create_devices(
                     ATTR_SERIAL_NUMBER: matter.serial_number,
                 }
             )
+        if Capability.SAMSUNG_CE_KITCHEN_DEVICE_IDENTIFICATION in device.status.get(
+            MAIN, {}
+        ):
+            identification = device.status[MAIN][
+                Capability.SAMSUNG_CE_KITCHEN_DEVICE_IDENTIFICATION
+            ]
+            kwargs.update(
+                {
+                    ATTR_MODEL_ID: identification[Attribute.MODEL_CODE].value,
+                }
+            )
         if (
             device_registry.async_get_device({(DOMAIN, device.device.device_id)})
             is None
