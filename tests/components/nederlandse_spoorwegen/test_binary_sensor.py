@@ -52,10 +52,7 @@ async def test_no_upcoming_trips(
     mock_nsapi.get_trips.return_value = []
     await setup_integration(hass, mock_config_entry)
 
-    assert (
-        hass.states.get("binary_sensor.to_work_departure_delayed").state
-        == STATE_UNKNOWN
-    )
+    assert hass.states.get("binary_sensor.to_home_going").state == STATE_UNKNOWN
 
 
 async def test_sensor_with_api_connection_error(

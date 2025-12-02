@@ -66,12 +66,6 @@
   },
   "entity": {
     "binary_sensor": {
-      "is_arrival_delayed": {
-        "name": "Arrival delayed"
-      },
-      "is_departure_delayed": {
-        "name": "Departure delayed"
-      },
       "is_going": {
         "name": "Going"
       }

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 import logging
 
 from ns_api import Trip
@@ -34,30 +33,7 @@ class NSBinarySensorEntityDescription(BinarySensorEntityDescription):
     value_fn: Callable[[Trip], bool]
 
 
-def get_delay(planned: datetime | None, actual: datetime | None) -> bool:
-    """Return True if delay is present, False otherwise."""
-    return bool(planned and actual and planned != actual)
-
-
 BINARY_SENSOR_DESCRIPTIONS = [
-    NSBinarySensorEntityDescription(
-        key="is_departure_delayed",
-        translation_key="is_departure_delayed",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda trip: get_delay(
-            trip.departure_time_planned, trip.departure_time_actual
-        ),
-        entity_registry_enabled_default=False,
-    ),
-    NSBinarySensorEntityDescription(
-        key="is_arrival_delayed",
-        translation_key="is_arrival_delayed",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda trip: get_delay(
-            trip.arrival_time_planned, trip.arrival_time_actual
-        ),
-        entity_registry_enabled_default=False,
-    ),
     NSBinarySensorEntityDescription(
         key="is_going",
         translation_key="is_going",
