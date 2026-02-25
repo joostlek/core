@@ -43,6 +43,19 @@
       "upper_threshold": {
         "name": "Maximum charge level"
       }
+    },
+    "select": {
+      "smart_mode": {
+        "name": "Smart mode",
+        "state": {
+          "charged": "Charged",
+          "default": "Default",
+          "dynamic": "Dynamic",
+          "feed": "Feed",
+          "performance": "Performance",
+          "self_use": "Self-use"
+        }
+      }
     }
   },
   "exceptions": {
