@@ -58,6 +58,7 @@ class LaundrifyPowerPlug(
             name=device.name,
             manufacturer=MANUFACTURER,
             model=MODELS[device.model],
+            model_id=device.model,
             sw_version=device.firmwareVersion,
             configuration_url=f"http://{device.internalIP}",
         )
