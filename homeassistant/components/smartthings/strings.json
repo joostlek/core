@@ -87,6 +87,9 @@
       }
     },
     "button": {
+      "reset_filter_usage": {
+        "name": "Reset filter usage"
+      },
       "reset_hepa_filter": {
         "name": "Reset HEPA filter"
       },
@@ -473,6 +476,9 @@
       },
       "equivalent_carbon_dioxide": {
         "name": "Equivalent carbon dioxide"
+      },
+      "filter_usage": {
+        "name": "Filter usage"
       },
       "formaldehyde": {
         "name": "Formaldehyde"

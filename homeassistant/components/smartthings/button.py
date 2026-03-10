@@ -50,6 +50,12 @@ CAPABILITIES_TO_BUTTONS: dict[Capability | str, SmartThingsButtonDescription] = 
         entity_category=EntityCategory.DIAGNOSTIC,
         component="station",
     ),
+    Capability.CUSTOM_FILTER_USAGE_TIME: SmartThingsButtonDescription(
+        key=Capability.CUSTOM_FILTER_USAGE_TIME,
+        translation_key="reset_filter_usage",
+        command=Command.RESET_FILTER_USAGE_TIME,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 }
 
 

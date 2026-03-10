@@ -1221,6 +1221,17 @@ CAPABILITY_TO_SENSORS: dict[
             )
         ]
     },
+    Capability.CUSTOM_FILTER_USAGE_TIME: {
+        Attribute.USAGE_TIME: [
+            SmartThingsSensorEntityDescription(
+                key=Attribute.USAGE_TIME,
+                translation_key="filter_usage",
+                state_class=SensorStateClass.MEASUREMENT,
+                native_unit_of_measurement=PERCENTAGE,
+                entity_category=EntityCategory.DIAGNOSTIC,
+            )
+        ]
+    },
 }
 
 

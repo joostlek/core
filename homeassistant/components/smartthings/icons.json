@@ -27,6 +27,9 @@
       }
     },
     "button": {
+      "reset_filter_usage": {
+        "default": "mdi:reload"
+      },
       "reset_hepa_filter": {
         "default": "mdi:air-filter"
       },
@@ -81,6 +84,9 @@
     "select": {
       "detergent_amount": {
         "default": "mdi:car-coolant-level"
+      },
+      "filter_usage": {
+        "default": "mdi:air-filter"
       },
       "flexible_detergent_amount": {
         "default": "mdi:car-coolant-level"
