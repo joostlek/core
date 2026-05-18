@@ -1,7 +1,5 @@
 """Huawei LTE buttons."""
 
-from __future__ import annotations
-
 import logging
 
 from huawei_lte_api.enums.device import ControlModeEnum
@@ -11,12 +9,11 @@ from homeassistant.components.button import (
     ButtonEntity,
     ButtonEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
 
-from .const import DOMAIN
+from . import HuaweiLteConfigEntry
 from .entity import HuaweiLteBaseEntityWithDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,11 +21,11 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: HuaweiLteConfigEntry,
     async_add_entities: entity_platform.AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Huawei LTE buttons."""
-    router = hass.data[DOMAIN].routers[config_entry.entry_id]
+    router = config_entry.runtime_data
     buttons = [
         ClearTrafficStatisticsButton(router),
         RestartButton(router),
@@ -70,7 +67,7 @@ class ClearTrafficStatisticsButton(BaseButton):
 
     entity_description = ButtonEntityDescription(
         key=BUTTON_KEY_CLEAR_TRAFFIC_STATISTICS,
-        name="Clear traffic statistics",
+        translation_key="clear_traffic_statistics",
         entity_category=EntityCategory.CONFIG,
     )
 
@@ -87,7 +84,6 @@ class RestartButton(BaseButton):
 
     entity_description = ButtonEntityDescription(
         key=BUTTON_KEY_RESTART,
-        name="Restart",
         device_class=ButtonDeviceClass.RESTART,
         entity_category=EntityCategory.CONFIG,
     )

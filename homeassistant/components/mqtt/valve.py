@@ -1,7 +1,5 @@
 """Support for MQTT valve devices."""
 
-from __future__ import annotations
-
 from contextlib import suppress
 import logging
 from typing import Any
@@ -42,6 +40,7 @@ from .const import (
     CONF_PAYLOAD_STOP,
     CONF_POSITION_CLOSED,
     CONF_POSITION_OPEN,
+    CONF_REPORTS_POSITION,
     CONF_RETAIN,
     CONF_STATE_CLOSED,
     CONF_STATE_CLOSING,
@@ -64,8 +63,6 @@ from .util import valid_publish_topic, valid_subscribe_topic
 _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
-
-CONF_REPORTS_POSITION = "reports_position"
 
 DEFAULT_NAME = "MQTT Valve"
 
@@ -112,8 +109,12 @@ _PLATFORM_SCHEMA_BASE = MQTT_BASE_SCHEMA.extend(
         vol.Optional(CONF_PAYLOAD_CLOSE): vol.Any(cv.string, None),
         vol.Optional(CONF_PAYLOAD_OPEN): vol.Any(cv.string, None),
         vol.Optional(CONF_PAYLOAD_STOP): vol.Any(cv.string, None),
-        vol.Optional(CONF_POSITION_CLOSED, default=DEFAULT_POSITION_CLOSED): int,
-        vol.Optional(CONF_POSITION_OPEN, default=DEFAULT_POSITION_OPEN): int,
+        vol.Optional(CONF_POSITION_CLOSED, default=DEFAULT_POSITION_CLOSED): vol.Coerce(
+            int
+        ),
+        vol.Optional(CONF_POSITION_OPEN, default=DEFAULT_POSITION_OPEN): vol.Coerce(
+            int
+        ),
         vol.Optional(CONF_REPORTS_POSITION, default=False): cv.boolean,
         vol.Optional(CONF_RETAIN, default=DEFAULT_RETAIN): cv.boolean,
         vol.Optional(CONF_STATE_CLOSED): cv.string,

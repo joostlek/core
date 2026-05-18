@@ -1,7 +1,5 @@
 """aioasuswrt and pyasuswrt bridge classes."""
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Coroutine
 import functools
@@ -111,8 +109,6 @@ def handle_errors_and_zip[_AsusWrtBridgeT: AsusWrtBridge](
 
             if isinstance(data, dict):
                 return dict(zip(keys, list(data.values()), strict=False))
-            if not isinstance(data, (list, tuple)):
-                raise UpdateFailed("Received invalid data type")
             return dict(zip(keys, data, strict=False))
 
         return _wrapper

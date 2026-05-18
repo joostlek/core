@@ -2,30 +2,36 @@
 
 from unittest.mock import AsyncMock
 
+import pytest
 from syrupy.assertion import SnapshotAssertion
 from syrupy.filters import props
 
 from homeassistant.core import HomeAssistant
 
-from tests.common import MockConfigEntry
+from . import setup_integration
+
 from tests.components.diagnostics import get_diagnostics_for_config_entry
 from tests.typing import ClientSessionGenerator
 
 
+@pytest.mark.parametrize(
+    ("config_entry_fixture"),
+    [
+        ("mock_config_entry_with_subentries"),
+        ("mock_config_entry_with_temperature_zone"),
+    ],
+)
 async def test_diagnostics(
     hass: HomeAssistant,
     snapshot: SnapshotAssertion,
     hass_client: ClientSessionGenerator,
-    mock_config_entry_with_subentries: MockConfigEntry,
     mock_satel: AsyncMock,
+    request: pytest.FixtureRequest,
+    config_entry_fixture: str,
 ) -> None:
     """Test diagnostics for config entry."""
-    mock_config_entry_with_subentries.add_to_hass(hass)
+    entry = request.getfixturevalue(config_entry_fixture)
+    await setup_integration(hass, entry)
 
-    await hass.config_entries.async_setup(mock_config_entry_with_subentries.entry_id)
-    await hass.async_block_till_done()
-
-    diagnostics = await get_diagnostics_for_config_entry(
-        hass, hass_client, mock_config_entry_with_subentries
-    )
+    diagnostics = await get_diagnostics_for_config_entry(hass, hass_client, entry)
     assert diagnostics == snapshot(exclude=props("created_at", "modified_at", "id"))

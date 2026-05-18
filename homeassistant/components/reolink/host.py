@@ -1,7 +1,5 @@
 """Module which encapsulates the NVR/camera API and subscription."""
 
-from __future__ import annotations
-
 import asyncio
 from collections import defaultdict
 from collections.abc import Mapping
@@ -130,6 +128,7 @@ class ReolinkHost:
         self._lost_subscription_start: bool = False
         self._lost_subscription: bool = False
         self.cancel_refresh_privacy_mode: CALLBACK_TYPE | None = None
+        self.cancel_first_firmware_check: CALLBACK_TYPE | None = None
 
     @callback
     def async_register_update_cmd(self, cmd: str, channel: int | None = None) -> None:
@@ -222,17 +221,13 @@ class ReolinkHost:
         enable_onvif = None
         enable_rtmp = None
 
-        if not self._api.rtsp_enabled and not self._api.baichuan_only:
+        if not self._api.rtsp_enabled and self._api.supported(None, "RTSP"):
             _LOGGER.debug(
                 "RTSP is disabled on %s, trying to enable it", self._api.nvr_name
             )
             enable_rtsp = True
 
-        if (
-            not self._api.onvif_enabled
-            and onvif_supported
-            and not self._api.baichuan_only
-        ):
+        if not self._api.onvif_enabled and onvif_supported:
             _LOGGER.debug(
                 "ONVIF is disabled on %s, trying to enable it", self._api.nvr_name
             )
@@ -365,14 +360,16 @@ class ReolinkHost:
         # start long polling if ONVIF push failed immediately
         if not self._onvif_push_supported and not self._api.baichuan.privacy_mode():
             _LOGGER.debug(
-                "Camera model %s does not support ONVIF push, using ONVIF long polling instead",
+                "Camera model %s does not support ONVIF push,"
+                " using ONVIF long polling instead",
                 self._api.model,
             )
             try:
                 await self._async_start_long_polling(initial=True)
             except NotSupportedError:
                 _LOGGER.debug(
-                    "Camera model %s does not support ONVIF long polling, using fast polling instead",
+                    "Camera model %s does not support ONVIF long"
+                    " polling, using fast polling instead",
                     self._api.model,
                 )
                 self._onvif_long_poll_supported = False
@@ -426,6 +423,8 @@ class ReolinkHost:
                     "name": self._api.nvr_name,
                     "base_url": self._base_url,
                     "network_link": "https://my.home-assistant.io/redirect/network/",
+                    "example_ip": "192.168.1.10",
+                    "example_url": "http://192.168.1.10:8123",
                 },
             )
 
@@ -440,6 +439,8 @@ class ReolinkHost:
                     translation_placeholders={
                         "base_url": self._base_url,
                         "network_link": "https://my.home-assistant.io/redirect/network/",
+                        "example_ip": "192.168.1.10",
+                        "example_url": "http://192.168.1.10:8123",
                     },
                 )
             else:
@@ -489,7 +490,9 @@ class ReolinkHost:
                 or (now - self.last_wake[channel] > BATTERY_WAKE_UPDATE_INTERVAL)
                 or (now - self.last_all_wake > BATTERY_ALL_WAKE_UPDATE_INTERVAL)
             ):
-                # let a waking update coincide with the camera waking up by itself unless it did not wake for BATTERY_WAKE_UPDATE_INTERVAL
+                # let a waking update coincide with the camera
+                # waking up by itself unless it did not wake
+                # for BATTERY_WAKE_UPDATE_INTERVAL
                 wake[channel] = True
                 self.last_wake[channel] = now
             else:
@@ -831,7 +834,7 @@ class ReolinkHost:
     async def handle_webhook(
         self, hass: HomeAssistant, webhook_id: str, request: Request
     ) -> None:
-        """Read the incoming webhook from Reolink for inbound messages and schedule processing."""
+        """Read the incoming webhook from Reolink and schedule processing."""
         _LOGGER.debug("Webhook '%s' called", webhook_id)
         data: bytes | None = None
         try:
@@ -862,7 +865,8 @@ class ReolinkHost:
             raise
         finally:
             # We want handle_webhook to return as soon as possible
-            # so we process the data in the background, this also shields from cancellation
+            # so we process the data in the background,
+            # this also shields from cancellation
             hass.async_create_background_task(
                 self._process_webhook_data(hass, webhook_id, data),
                 "Process Reolink webhook",
@@ -882,7 +886,8 @@ class ReolinkHost:
             if not data:
                 if not await self._api.get_motion_state_all_ch():
                     _LOGGER.error(
-                        "Could not poll motion state after losing connection during receiving ONVIF event"
+                        "Could not poll motion state after losing"
+                        " connection during receiving ONVIF event"
                     )
                     return
                 self._signal_write_ha_state()

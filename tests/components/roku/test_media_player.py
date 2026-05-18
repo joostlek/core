@@ -30,12 +30,11 @@ from homeassistant.components.media_player import (
 from homeassistant.components.roku.const import (
     ATTR_CONTENT_ID,
     ATTR_FORMAT,
-    ATTR_KEYWORD,
     ATTR_MEDIA_TYPE,
     DEFAULT_PLAY_MEDIA_APP_ID,
     DOMAIN,
-    SERVICE_SEARCH,
 )
+from homeassistant.components.roku.services import ATTR_KEYWORD, SERVICE_SEARCH
 from homeassistant.components.stream import FORMAT_CONTENT_TYPE, HLS_PROVIDER
 from homeassistant.components.websocket_api import TYPE_RESULT
 from homeassistant.const import (
@@ -661,7 +660,9 @@ async def test_services_play_media_local_source(
         {
             ATTR_ENTITY_ID: MAIN_ENTITY_ID,
             ATTR_MEDIA_CONTENT_TYPE: "video/mp4",
-            ATTR_MEDIA_CONTENT_ID: "media-source://media_source/local/Epic Sax Guy 10 Hours.mp4",
+            ATTR_MEDIA_CONTENT_ID: (
+                "media-source://media_source/local/Epic Sax Guy 10 Hours.mp4"
+            ),
         },
         blocking=True,
     )

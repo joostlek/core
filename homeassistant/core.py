@@ -4,8 +4,6 @@ Home Assistant is a Home Automation framework for observing the state
 of entities and react to changes.
 """
 
-from __future__ import annotations
-
 import asyncio
 from collections import UserDict, defaultdict
 from collections.abc import (
@@ -84,12 +82,6 @@ from .exceptions import (
     ServiceValidationError,
     Unauthorized,
 )
-from .helpers.deprecation import (
-    DeferredDeprecatedAlias,
-    all_with_deprecated_constants,
-    check_if_deprecated_constant,
-    dir_with_deprecated_constants,
-)
 from .helpers.json import json_bytes, json_fragment
 from .helpers.typing import VolSchemaType
 from .util import dt as dt_util
@@ -161,18 +153,6 @@ class EventStateReportedData(EventStateEventData):
     old_last_reported: datetime.datetime
 
 
-def _deprecated_core_config() -> Any:
-    from . import core_config  # noqa: PLC0415
-
-    return core_config.Config
-
-
-# The Config class was moved to core_config in Home Assistant 2024.11
-_DEPRECATED_Config = DeferredDeprecatedAlias(
-    _deprecated_core_config, "homeassistant.core_config.Config", "2025.11"
-)
-
-
 # How long to wait until things that run on startup have to finish.
 TIMEOUT_EVENT_START = 15
 
@@ -227,7 +207,7 @@ def validate_state(state: str) -> str:
 
 def callback[_CallableT: Callable[..., Any]](func: _CallableT) -> _CallableT:
     """Annotation to mark method as safe to call from within the event loop."""
-    setattr(func, "_hass_callback", True)
+    setattr(func, "_hass_callback", True)  # noqa: B010
     return func
 
 
@@ -280,6 +260,8 @@ def async_get_hass_or_none() -> HomeAssistant | None:
 
 
 class ReleaseChannel(enum.StrEnum):
+    """Release channel."""
+
     BETA = "beta"
     DEV = "dev"
     NIGHTLY = "nightly"
@@ -560,8 +542,9 @@ class HomeAssistant:
     ) -> None:
         """Add a job to be executed by the event loop or by an executor.
 
-        If the job is either a coroutine or decorated with @callback, it will be
-        run by the event loop, if not it will be run by an executor.
+        If the job is a coroutine, coroutine function, or decorated with
+        @callback, it will be run by the event loop, if not it will be run
+        by an executor.
 
         target: target to call.
         args: parameters for method to call.
@@ -572,6 +555,15 @@ class HomeAssistant:
             self.loop.call_soon_threadsafe(
                 functools.partial(self.async_create_task, target, eager_start=True)
             )
+            return
+        # For @callback targets, schedule directly via call_soon_threadsafe
+        # to avoid the extra deferral through _async_add_hass_job + call_soon.
+        # Check iscoroutinefunction to gracefully handle
+        # incorrectly labeled @callback functions.
+        if is_callback_check_partial(target) and not inspect.iscoroutinefunction(
+            target
+        ):
+            self.loop.call_soon_threadsafe(target, *args)
             return
         self.loop.call_soon_threadsafe(
             functools.partial(self._async_add_hass_job, HassJob(target), *args)
@@ -614,8 +606,9 @@ class HomeAssistant:
     ) -> asyncio.Future[_R] | None:
         """Add a job to be executed by the event loop or by an executor.
 
-        If the job is either a coroutine or decorated with @callback, it will be
-        run by the event loop, if not it will be run by an executor.
+        If the job is a coroutine, coroutine function, or decorated with
+        @callback, it will be run by the event loop, if not it will be run
+        by an executor.
 
         This method must be run in the event loop.
 
@@ -1713,7 +1706,7 @@ class EventBus:
             # delete event_type list if empty
             if not self._listeners[event_type] and event_type != MATCH_ALL:
                 self._listeners.pop(event_type)
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             # KeyError is key event_type listener did not exist
             # ValueError if listener did not exist within event_type
             _LOGGER.exception(
@@ -2426,7 +2419,12 @@ class SupportsResponse(enum.StrEnum):
 class Service:
     """Representation of a callable service."""
 
-    __slots__ = ["domain", "job", "schema", "service", "supports_response"]
+    __slots__ = [
+        "description_placeholders",
+        "job",
+        "schema",
+        "supports_response",
+    ]
 
     def __init__(
         self,
@@ -2443,11 +2441,13 @@ class Service:
         context: Context | None = None,
         supports_response: SupportsResponse = SupportsResponse.NONE,
         job_type: HassJobType | None = None,
+        description_placeholders: Mapping[str, str] | None = None,
     ) -> None:
         """Initialize a service."""
         self.job = HassJob(func, f"service {domain}.{service}", job_type=job_type)
         self.schema = schema
         self.supports_response = supports_response
+        self.description_placeholders = description_placeholders
 
 
 class ServiceCall:
@@ -2590,6 +2590,8 @@ class ServiceRegistry:
         schema: VolSchemaType | None = None,
         supports_response: SupportsResponse = SupportsResponse.NONE,
         job_type: HassJobType | None = None,
+        *,
+        description_placeholders: Mapping[str, str] | None = None,
     ) -> None:
         """Register a service.
 
@@ -2599,7 +2601,13 @@ class ServiceRegistry:
         """
         self._hass.verify_event_loop_thread("hass.services.async_register")
         self._async_register(
-            domain, service, service_func, schema, supports_response, job_type
+            domain,
+            service,
+            service_func,
+            schema,
+            supports_response,
+            job_type,
+            description_placeholders,
         )
 
     @callback
@@ -2617,6 +2625,7 @@ class ServiceRegistry:
         schema: VolSchemaType | None = None,
         supports_response: SupportsResponse = SupportsResponse.NONE,
         job_type: HassJobType | None = None,
+        description_placeholders: Mapping[str, str] | None = None,
     ) -> None:
         """Register a service.
 
@@ -2633,6 +2642,7 @@ class ServiceRegistry:
             service,
             supports_response=supports_response,
             job_type=job_type,
+            description_placeholders=description_placeholders,
         )
 
         if domain in self._services:
@@ -2724,7 +2734,8 @@ class ServiceRegistry:
 
         If return_response=True, indicates that the caller can consume return values
         from the service, if any. Return values are a dict that can be returned by the
-        standard JSON serialization process. Return values can only be used with blocking=True.
+        standard JSON serialization process. Return values can only
+        be used with blocking=True.
 
         This method will fire an event to indicate the service has been called.
 
@@ -2864,11 +2875,3 @@ class ServiceRegistry:
         if TYPE_CHECKING:
             target = cast(Callable[..., ServiceResponse], target)
         return await self._hass.async_add_executor_job(target, service_call)
-
-
-# These can be removed if no deprecated constant are in this module anymore
-__getattr__ = functools.partial(check_if_deprecated_constant, module_globals=globals())
-__dir__ = functools.partial(
-    dir_with_deprecated_constants, module_globals_keys=[*globals().keys()]
-)
-__all__ = all_with_deprecated_constants(globals())

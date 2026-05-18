@@ -1,7 +1,5 @@
 """Models for SQLAlchemy."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from datetime import datetime, timedelta
 import logging
@@ -71,7 +69,7 @@ class LegacyBase(DeclarativeBase):
     """Base class for tables, used for schema migration."""
 
 
-SCHEMA_VERSION = 51
+SCHEMA_VERSION = 53
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,7 +126,7 @@ LEGACY_STATES_ENTITY_ID_LAST_UPDATED_TS_INDEX = "ix_states_entity_id_last_update
 LEGACY_MAX_LENGTH_EVENT_CONTEXT_ID: Final = 36
 CONTEXT_ID_BIN_MAX_LENGTH = 16
 
-MYSQL_COLLATE = "utf8mb4_unicode_ci"
+MYSQL_COLLATE = "utf8mb4_bin"
 MYSQL_DEFAULT_CHARSET = "utf8mb4"
 MYSQL_ENGINE = "InnoDB"
 
@@ -179,20 +177,21 @@ class FAST_PYSQLITE_DATETIME(sqlite.DATETIME):
 
 
 class NativeLargeBinary(LargeBinary):
-    """A faster version of LargeBinary for engines that support python bytes natively."""
+    """A faster version of LargeBinary for native bytes engines."""
 
     def result_processor(self, dialect: Dialect, coltype: Any) -> Callable | None:
         """No conversion needed for engines that support native bytes."""
         return None
 
 
-# Although all integers are same in SQLite, it does not allow an identity column to be BIGINT
+# Although all integers are same in SQLite, it does not allow
+# an identity column to be BIGINT
 # https://sqlite.org/forum/info/2dfa968a702e1506e885cb06d92157d492108b22bf39459506ab9f7125bca7fd
 ID_TYPE = BigInteger().with_variant(sqlite.INTEGER, "sqlite")
 # For MariaDB and MySQL we can use an unsigned integer type since it will fit 2**32
 # for sqlite and postgresql we use a bigint
 UINT_32_TYPE = BigInteger().with_variant(
-    mysql.INTEGER(unsigned=True),  # type: ignore[no-untyped-call]
+    mysql.INTEGER(unsigned=True),
     "mysql",
     "mariadb",
 )
@@ -206,12 +205,12 @@ JSONB_VARIANT_CAST = Text().with_variant(
 )
 DATETIME_TYPE = (
     DateTime(timezone=True)
-    .with_variant(mysql.DATETIME(timezone=True, fsp=6), "mysql", "mariadb")  # type: ignore[no-untyped-call]
+    .with_variant(mysql.DATETIME(timezone=True, fsp=6), "mysql", "mariadb")
     .with_variant(FAST_PYSQLITE_DATETIME(), "sqlite")  # type: ignore[no-untyped-call]
 )
 DOUBLE_TYPE = (
     Float()
-    .with_variant(mysql.DOUBLE(asdecimal=False), "mysql", "mariadb")  # type: ignore[no-untyped-call]
+    .with_variant(mysql.DOUBLE(asdecimal=False), "mysql", "mariadb")
     .with_variant(oracle.DOUBLE_PRECISION(), "oracle")
     .with_variant(postgresql.DOUBLE_PRECISION(), "postgresql")
 )

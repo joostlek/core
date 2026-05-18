@@ -4,7 +4,6 @@ import re
 from unittest.mock import patch
 
 from pyisy import ISYConnectionError, ISYInvalidAuthError
-import pytest
 
 from homeassistant import config_entries
 from homeassistant.components.isy994.const import (
@@ -154,7 +153,7 @@ async def test_form_invalid_auth(hass: HomeAssistant) -> None:
     assert result2["errors"] == {CONF_PASSWORD: "invalid_auth"}
 
 
-async def test_form_unknown_exeption(hass: HomeAssistant) -> None:
+async def test_form_unknown_exception(hass: HomeAssistant) -> None:
     """Test we handle generic exceptions."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -190,9 +189,7 @@ async def test_form_isy_connection_error(hass: HomeAssistant) -> None:
     assert result2["errors"] == {"base": "cannot_connect"}
 
 
-async def test_form_isy_parse_response_error(
-    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
-) -> None:
+async def test_form_isy_parse_response_error(hass: HomeAssistant) -> None:
     """Test we handle poorly formatted XML response from ISY."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -207,7 +204,7 @@ async def test_form_isy_parse_response_error(
         )
 
     assert result2["type"] is FlowResultType.FORM
-    assert "ISY Could not parse response, poorly formatted XML." in caplog.text
+    assert result2["errors"] == {"base": "cannot_connect"}
 
 
 async def test_form_no_name_in_response(hass: HomeAssistant) -> None:

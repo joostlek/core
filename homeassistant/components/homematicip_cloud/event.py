@@ -85,6 +85,7 @@ class HomematicipDoorBellEvent(HomematicipGenericEntity, EventEntity):
             post=description.key,
             channel=channel,
             is_multi_channel=False,
+            feature_id="doorbell",
         )
 
         self.entity_description = description
@@ -92,7 +93,9 @@ class HomematicipDoorBellEvent(HomematicipGenericEntity, EventEntity):
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
         await super().async_added_to_hass()
-        self.functional_channel.add_on_channel_event_handler(self._async_handle_event)
+
+        channel = self.get_channel_or_raise()
+        channel.add_on_channel_event_handler(self._async_handle_event)
 
     @callback
     def _async_handle_event(self, *args, **kwargs) -> None:

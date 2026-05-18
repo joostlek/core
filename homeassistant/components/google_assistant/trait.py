@@ -1,7 +1,5 @@
 """Implement the Google Smart Home traits."""
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 import logging
@@ -303,7 +301,7 @@ class _Trait(ABC):
         """Return the attributes of this trait for this entity."""
         raise NotImplementedError
 
-    def query_notifications(self) -> dict[str, Any] | None:
+    def query_notifications(self) -> dict[str, Any] | None:  # noqa: B027
         """Return notifications payload."""
 
     def can_execute(self, command, params):
@@ -908,12 +906,21 @@ class StartStopTrait(_Trait):
             }
 
         if domain in COVER_VALVE_DOMAINS:
+            assumed_state_or_set_position = bool(
+                (
+                    self.state.attributes.get(ATTR_SUPPORTED_FEATURES, 0)
+                    & COVER_VALVE_SET_POSITION_FEATURE[domain]
+                )
+                or self.state.attributes.get(ATTR_ASSUMED_STATE)
+            )
+
             return {
                 "isRunning": state
                 in (
                     COVER_VALVE_STATES[domain]["closing"],
                     COVER_VALVE_STATES[domain]["opening"],
                 )
+                or assumed_state_or_set_position
             }
 
         raise NotImplementedError(f"Unsupported domain {domain}")
@@ -975,11 +982,23 @@ class StartStopTrait(_Trait):
         """Execute a StartStop command."""
         domain = self.state.domain
         if command == COMMAND_START_STOP:
+            assumed_state_or_set_position = bool(
+                (
+                    self.state.attributes.get(ATTR_SUPPORTED_FEATURES, 0)
+                    & COVER_VALVE_SET_POSITION_FEATURE[domain]
+                )
+                or self.state.attributes.get(ATTR_ASSUMED_STATE)
+            )
+
             if params["start"] is False:
-                if self.state.state in (
-                    COVER_VALVE_STATES[domain]["closing"],
-                    COVER_VALVE_STATES[domain]["opening"],
-                ) or self.state.attributes.get(ATTR_ASSUMED_STATE):
+                if (
+                    self.state.state
+                    in (
+                        COVER_VALVE_STATES[domain]["closing"],
+                        COVER_VALVE_STATES[domain]["opening"],
+                    )
+                    or assumed_state_or_set_position
+                ):
                     await self.hass.services.async_call(
                         domain,
                         SERVICE_STOP_COVER_VALVE[domain],
@@ -992,7 +1011,14 @@ class StartStopTrait(_Trait):
                         ERR_ALREADY_STOPPED,
                         f"{FRIENDLY_DOMAIN[domain]} is already stopped",
                     )
-            else:
+            elif (
+                self.state.state
+                in (
+                    COVER_VALVE_STATES[domain]["open"],
+                    COVER_VALVE_STATES[domain]["closed"],
+                )
+                or assumed_state_or_set_position
+            ):
                 await self.hass.services.async_call(
                     domain,
                     SERVICE_TOGGLE_COVER_VALVE[domain],
@@ -1048,14 +1074,16 @@ class TemperatureControlTrait(_Trait):
                     float(attrs[water_heater.ATTR_MIN_TEMP]),
                     unit,
                     UnitOfTemperature.CELSIUS,
-                )
+                ),
+                1,
             )
             max_temp = round(
                 TemperatureConverter.convert(
                     float(attrs[water_heater.ATTR_MAX_TEMP]),
                     unit,
                     UnitOfTemperature.CELSIUS,
-                )
+                ),
+                1,
             )
             response["temperatureRange"] = {
                 "minThresholdCelsius": min_temp,
@@ -1173,6 +1201,17 @@ class TemperatureSettingTrait(_Trait):
     preset_to_google = {climate.PRESET_ECO: "eco"}
     google_to_preset = {value: key for key, value in preset_to_google.items()}
 
+    action_to_google = {
+        climate.HVACAction.OFF: "off",
+        climate.HVACAction.HEATING: "heat",
+        climate.HVACAction.DEFROSTING: "heat",
+        climate.HVACAction.PREHEATING: "heat",
+        climate.HVACAction.COOLING: "cool",
+        climate.HVACAction.DRYING: "dry",
+        climate.HVACAction.FAN: "fan-only",
+        climate.HVACAction.IDLE: "none",
+    }
+
     @staticmethod
     def supported(domain, features, device_class, _):
         """Test if state is supported."""
@@ -1208,14 +1247,16 @@ class TemperatureSettingTrait(_Trait):
                 float(attrs[climate.ATTR_MIN_TEMP]),
                 unit,
                 UnitOfTemperature.CELSIUS,
-            )
+            ),
+            1,
         )
         max_temp = round(
             TemperatureConverter.convert(
                 float(attrs[climate.ATTR_MAX_TEMP]),
                 unit,
                 UnitOfTemperature.CELSIUS,
-            )
+            ),
+            1,
         )
         response["thermostatTemperatureRange"] = {
             "minThresholdCelsius": min_temp,
@@ -1253,6 +1294,11 @@ class TemperatureSettingTrait(_Trait):
             response["thermostatMode"] = self.preset_to_google[preset]
         else:
             response["thermostatMode"] = self.hvac_to_google.get(operation, "none")
+
+        if (
+            action := self.action_to_google.get(attrs.get(climate.ATTR_HVAC_ACTION))
+        ) is not None:
+            response["activeThermostatMode"] = action
 
         current_temp = attrs.get(climate.ATTR_CURRENT_TEMPERATURE)
         if current_temp is not None:
@@ -1591,7 +1637,9 @@ class ArmDisArmTrait(_Trait):
         AlarmControlPanelState.ARMED_HOME: AlarmControlPanelEntityFeature.ARM_HOME,
         AlarmControlPanelState.ARMED_NIGHT: AlarmControlPanelEntityFeature.ARM_NIGHT,
         AlarmControlPanelState.ARMED_AWAY: AlarmControlPanelEntityFeature.ARM_AWAY,
-        AlarmControlPanelState.ARMED_CUSTOM_BYPASS: AlarmControlPanelEntityFeature.ARM_CUSTOM_BYPASS,
+        AlarmControlPanelState.ARMED_CUSTOM_BYPASS: (
+            AlarmControlPanelEntityFeature.ARM_CUSTOM_BYPASS
+        ),
         AlarmControlPanelState.TRIGGERED: AlarmControlPanelEntityFeature.TRIGGER,
     }
     """The list of states to support in increasing security state."""
@@ -1724,15 +1772,15 @@ class FanSpeedTrait(_Trait):
         """Initialize a trait for a state."""
         super().__init__(hass, state, config)
         if state.domain == fan.DOMAIN:
-            speed_count = min(
-                FAN_SPEED_MAX_SPEED_COUNT,
-                round(
-                    100 / (self.state.attributes.get(fan.ATTR_PERCENTAGE_STEP) or 1.0)
-                ),
+            speed_count = round(
+                100 / (self.state.attributes.get(fan.ATTR_PERCENTAGE_STEP) or 1.0)
             )
-            self._ordered_speed = [
-                f"{speed}/{speed_count}" for speed in range(1, speed_count + 1)
-            ]
+            if speed_count <= FAN_SPEED_MAX_SPEED_COUNT:
+                self._ordered_speed = [
+                    f"{speed}/{speed_count}" for speed in range(1, speed_count + 1)
+                ]
+            else:
+                self._ordered_speed = []
 
     @staticmethod
     def supported(domain, features, device_class, _):
@@ -1758,7 +1806,11 @@ class FanSpeedTrait(_Trait):
             result.update(
                 {
                     "reversible": reversible,
-                    "supportsFanSpeedPercent": True,
+                    # supportsFanSpeedPercent is mutually exclusive with
+                    # availableFanSpeeds, where supportsFanSpeedPercent takes
+                    # precedence. Report it only when step speeds are not
+                    # supported so Google renders a percent slider (1-100%).
+                    "supportsFanSpeedPercent": not self._ordered_speed,
                 }
             )
 
@@ -1804,10 +1856,12 @@ class FanSpeedTrait(_Trait):
 
         if domain == fan.DOMAIN:
             percent = attrs.get(fan.ATTR_PERCENTAGE) or 0
-            response["currentFanSpeedPercent"] = percent
-            response["currentFanSpeedSetting"] = percentage_to_ordered_list_item(
-                self._ordered_speed, percent
-            )
+            if self._ordered_speed:
+                response["currentFanSpeedSetting"] = percentage_to_ordered_list_item(
+                    self._ordered_speed, percent
+                )
+            else:
+                response["currentFanSpeedPercent"] = percent
 
         return response
 
@@ -1827,7 +1881,7 @@ class FanSpeedTrait(_Trait):
             )
 
         if domain == fan.DOMAIN:
-            if fan_speed := params.get("fanSpeed"):
+            if self._ordered_speed and (fan_speed := params.get("fanSpeed")):
                 fan_speed_percent = ordered_list_item_to_percentage(
                     self._ordered_speed, fan_speed
                 )

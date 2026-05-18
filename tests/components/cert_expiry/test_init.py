@@ -2,7 +2,7 @@
 
 from unittest.mock import patch
 
-from freezegun import freeze_time
+import pytest
 
 from homeassistant.components.cert_expiry.const import DOMAIN
 from homeassistant.config_entries import ConfigEntryState
@@ -44,7 +44,7 @@ async def test_update_unique_id(hass: HomeAssistant) -> None:
     assert entry.unique_id == f"{HOST}:{PORT}"
 
 
-@freeze_time(static_datetime())
+@pytest.mark.freeze_time(static_datetime())
 async def test_unload_config_entry(hass: HomeAssistant) -> None:
     """Test unloading a config entry."""
     assert hass.state is CoreState.running
@@ -72,7 +72,7 @@ async def test_unload_config_entry(hass: HomeAssistant) -> None:
     assert entry.state is ConfigEntryState.LOADED
     state = hass.states.get("sensor.example_com_cert_expiry")
     assert state.state == timestamp.isoformat()
-    assert state.attributes.get("error") == "None"
+    assert state.attributes.get("error") is None
     assert state.attributes.get("is_valid")
 
     await hass.config_entries.async_unload(entry.entry_id)
@@ -115,5 +115,5 @@ async def test_delay_load_during_startup(hass: HomeAssistant) -> None:
 
     state = hass.states.get("sensor.example_com_cert_expiry")
     assert state.state == timestamp.isoformat()
-    assert state.attributes.get("error") == "None"
+    assert state.attributes.get("error") is None
     assert state.attributes.get("is_valid")

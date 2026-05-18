@@ -1,7 +1,5 @@
 """Config flow for the Niko home control integration."""
 
-from __future__ import annotations
-
 import logging
 from typing import Any
 
@@ -28,9 +26,13 @@ async def test_connection(host: str) -> str | None:
     controller = NHCController(host, 8000)
     try:
         await controller.connect()
-    except Exception:
-        _LOGGER.exception("Unexpected exception")
+    except TimeoutError:
+        return "timeout_connect"
+    except OSError:
         return "cannot_connect"
+    except Exception:
+        _LOGGER.exception("Unexpected exception during connection")
+        return "unknown"
     return None
 
 

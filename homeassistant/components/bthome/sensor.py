@@ -1,7 +1,5 @@
 """Support for BTHome sensors."""
 
-from __future__ import annotations
-
 from typing import cast
 
 from bthome_ble import SensorDeviceClass as BTHomeSensorDeviceClass, SensorUpdate, Units
@@ -59,6 +57,7 @@ SENSOR_DESCRIPTIONS = {
         key=f"{BTHomeSensorDeviceClass.ACCELERATION}_{Units.ACCELERATION_METERS_PER_SQUARE_SECOND}",
         native_unit_of_measurement=Units.ACCELERATION_METERS_PER_SQUARE_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
+        translation_key="acceleration",
     ),
     # Battery (percent)
     (BTHomeSensorDeviceClass.BATTERY, Units.PERCENTAGE): SensorEntityDescription(
@@ -72,6 +71,7 @@ SENSOR_DESCRIPTIONS = {
     (BTHomeExtendedSensorDeviceClass.CHANNEL, None): SensorEntityDescription(
         key=str(BTHomeExtendedSensorDeviceClass.CHANNEL),
         state_class=SensorStateClass.MEASUREMENT,
+        translation_key="channel",
     ),
     # Conductivity (μS/cm)
     (
@@ -87,6 +87,7 @@ SENSOR_DESCRIPTIONS = {
     (BTHomeSensorDeviceClass.COUNT, None): SensorEntityDescription(
         key=str(BTHomeSensorDeviceClass.COUNT),
         state_class=SensorStateClass.MEASUREMENT,
+        translation_key="count",
     ),
     # CO2 (parts per million)
     (
@@ -114,12 +115,14 @@ SENSOR_DESCRIPTIONS = {
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
+        translation_key="dew_point",
     ),
     # Directions (°)
     (BTHomeExtendedSensorDeviceClass.DIRECTION, Units.DEGREE): SensorEntityDescription(
         key=f"{BTHomeExtendedSensorDeviceClass.DIRECTION}_{Units.DEGREE}",
         native_unit_of_measurement=DEGREE,
         state_class=SensorStateClass.MEASUREMENT,
+        translation_key="direction",
     ),
     # Distance (mm)
     (
@@ -173,6 +176,7 @@ SENSOR_DESCRIPTIONS = {
         key=f"{BTHomeSensorDeviceClass.GYROSCOPE}_{Units.GYROSCOPE_DEGREES_PER_SECOND}",
         native_unit_of_measurement=Units.GYROSCOPE_DEGREES_PER_SECOND,
         state_class=SensorStateClass.MEASUREMENT,
+        translation_key="gyroscope",
     ),
     # Humidity in (percent)
     (BTHomeSensorDeviceClass.HUMIDITY, Units.PERCENTAGE): SensorEntityDescription(
@@ -215,6 +219,7 @@ SENSOR_DESCRIPTIONS = {
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        translation_key="packet_id",
     ),
     # PM10 (μg/m3)
     (
@@ -263,12 +268,14 @@ SENSOR_DESCRIPTIONS = {
     # Raw (-)
     (BTHomeExtendedSensorDeviceClass.RAW, None): SensorEntityDescription(
         key=str(BTHomeExtendedSensorDeviceClass.RAW),
+        translation_key="raw",
     ),
     # Rotation (°)
     (BTHomeSensorDeviceClass.ROTATION, Units.DEGREE): SensorEntityDescription(
         key=f"{BTHomeSensorDeviceClass.ROTATION}_{Units.DEGREE}",
         native_unit_of_measurement=DEGREE,
         state_class=SensorStateClass.MEASUREMENT,
+        translation_key="rotation",
     ),
     # Rotational speed (rpm)
     (
@@ -278,6 +285,7 @@ SENSOR_DESCRIPTIONS = {
         key=f"{BTHomeExtendedSensorDeviceClass.ROTATIONAL_SPEED}_{Units.REVOLUTIONS_PER_MINUTE}",
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         state_class=SensorStateClass.MEASUREMENT,
+        translation_key="rotational_speed",
     ),
     # Signal Strength (RSSI) (dB)
     (
@@ -311,6 +319,7 @@ SENSOR_DESCRIPTIONS = {
     # Text (-)
     (BTHomeExtendedSensorDeviceClass.TEXT, None): SensorEntityDescription(
         key=str(BTHomeExtendedSensorDeviceClass.TEXT),
+        translation_key="text",
     ),
     # Timestamp (datetime object)
     (
@@ -327,6 +336,7 @@ SENSOR_DESCRIPTIONS = {
     ): SensorEntityDescription(
         key=str(BTHomeSensorDeviceClass.UV_INDEX),
         state_class=SensorStateClass.MEASUREMENT,
+        translation_key="uv_index",
     ),
     # Volatile organic Compounds (VOC) (μg/m3)
     (
@@ -423,10 +433,7 @@ def sensor_update_to_bluetooth_data_update(
             )
             for device_key, sensor_values in sensor_update.entity_values.items()
         },
-        entity_names={
-            device_key_to_bluetooth_entity_key(device_key): sensor_values.name
-            for device_key, sensor_values in sensor_update.entity_values.items()
-        },
+        entity_names={},
     )
 
 

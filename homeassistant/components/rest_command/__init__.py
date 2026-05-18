@@ -1,7 +1,5 @@
 """Support for exposing regular REST commands as services."""
 
-from __future__ import annotations
-
 from http import HTTPStatus
 from json.decoder import JSONDecodeError
 import logging
@@ -10,6 +8,7 @@ from typing import Any
 import aiohttp
 from aiohttp import hdrs
 import voluptuous as vol
+from yarl import URL
 
 from homeassistant.const import (
     CONF_AUTHENTICATION,
@@ -51,6 +50,7 @@ SUPPORT_REST_METHODS = ["get", "patch", "post", "put", "delete"]
 
 CONF_CONTENT_TYPE = "content_type"
 CONF_INSECURE_CIPHER = "insecure_cipher"
+CONF_SKIP_URL_ENCODING = "skip_url_encoding"
 
 COMMAND_SCHEMA = vol.Schema(
     {
@@ -69,6 +69,7 @@ COMMAND_SCHEMA = vol.Schema(
         vol.Optional(CONF_CONTENT_TYPE): cv.string,
         vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): cv.boolean,
         vol.Optional(CONF_INSECURE_CIPHER, default=False): cv.boolean,
+        vol.Optional(CONF_SKIP_URL_ENCODING, default=False): cv.boolean,
     }
 )
 
@@ -113,6 +114,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         method = command_config[CONF_METHOD]
 
         template_url = command_config[CONF_URL]
+        skip_url_encoding = command_config[CONF_SKIP_URL_ENCODING]
 
         auth = None
         digest_middleware = None
@@ -179,7 +181,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     request_kwargs["middlewares"] = (digest_middleware,)
 
                 async with getattr(websession, method)(
-                    request_url,
+                    URL(request_url, encoded=skip_url_encoding),
                     **request_kwargs,
                 ) as response:
                     if response.status < HTTPStatus.BAD_REQUEST:
@@ -198,8 +200,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                         )
 
                     if not service.return_response:
-                        # always read the response to avoid closing the connection
-                        # before the server has finished sending it, while avoiding excessive memory usage
+                        # always read the response to avoid closing
+                        # the connection before the server has
+                        # finished sending it, while avoiding
+                        # excessive memory usage
                         async for _ in response.content.iter_chunked(1024):
                             pass
 

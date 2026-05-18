@@ -1,7 +1,5 @@
 """Support for RuuviTag sensors."""
 
-from __future__ import annotations
-
 from sensor_state_data import (
     DeviceKey,
     SensorDeviceClass as SSDSensorDeviceClass,
@@ -151,6 +149,12 @@ SENSOR_DESCRIPTIONS = {
         translation_key="nox_index",
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    "iaqs": SensorEntityDescription(
+        key="iaqs",
+        translation_key="iaqs",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_registry_enabled_default=False,
+    ),
 }
 
 
@@ -191,7 +195,9 @@ async def async_setup_entry(
     entry: config_entries.ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the Ruuvitag BLE sensors."""
+    """Set up the Ruuvi BLE sensors."""
+    # Uses legacy hass.data[DOMAIN] pattern
+    # pylint: disable-next=home-assistant-use-runtime-data
     coordinator: PassiveBluetoothProcessorCoordinator = hass.data[DOMAIN][
         entry.entry_id
     ]
@@ -210,7 +216,7 @@ class RuuvitagBluetoothSensorEntity(
     ],
     SensorEntity,
 ):
-    """Representation of a Ruuvitag BLE sensor."""
+    """Representation of a Ruuvi BLE sensor."""
 
     @property
     def native_value(self) -> int | float | None:

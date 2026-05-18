@@ -1,9 +1,6 @@
 """The yolink integration."""
 
-from __future__ import annotations
-
 import asyncio
-from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
@@ -13,21 +10,25 @@ from yolink.exception import YoLinkAuthFailError, YoLinkClientError
 from yolink.home_manager import YoLinkHome
 from yolink.message_listener import MessageListener
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import (
     aiohttp_client,
-    config_entry_oauth2_flow,
     config_validation as cv,
     device_registry as dr,
+)
+from homeassistant.helpers.config_entry_oauth2_flow import (
+    ImplementationUnavailableError,
+    OAuth2Session,
+    async_get_config_entry_implementation,
 )
 from homeassistant.helpers.typing import ConfigType
 
 from . import api
 from .const import ATTR_LORA_INFO, DOMAIN, SUPPORTED_REMOTERS, YOLINK_EVENT
-from .coordinator import YoLinkCoordinator
+from .coordinator import YoLinkConfigEntry, YoLinkCoordinator, YoLinkHomeStore
 from .device_trigger import CONF_LONG_PRESS, CONF_SHORT_PRESS
 from .services import async_setup_services
 
@@ -54,24 +55,20 @@ PLATFORMS = [
 class YoLinkHomeMessageListener(MessageListener):
     """YoLink home message listener."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, entry: YoLinkConfigEntry) -> None:
         """Init YoLink home message listener."""
         self._hass = hass
         self._entry = entry
 
     def on_message(self, device: YoLinkDevice, msg_data: dict[str, Any]) -> None:
         """On YoLink home message received."""
-        entry_data = self._hass.data[DOMAIN].get(self._entry.entry_id)
-        if not entry_data:
+        if self._entry.state is not ConfigEntryState.LOADED or not (
+            device_coordinator := self._entry.runtime_data.device_coordinators.get(
+                device.device_id
+            )
+        ):
             return
-        device_coordinators = entry_data.device_coordinators
-        if not device_coordinators:
-            return
-        device_coordinator: YoLinkCoordinator = device_coordinators.get(
-            device.device_id
-        )
-        if device_coordinator is None:
-            return
+
         device_coordinator.dev_online = True
         if (loraInfo := msg_data.get(ATTR_LORA_INFO)) is not None:
             device_coordinator.dev_net_type = loraInfo.get("devNetType")
@@ -101,14 +98,6 @@ class YoLinkHomeMessageListener(MessageListener):
             self._hass.bus.async_fire(YOLINK_EVENT, event_data)
 
 
-@dataclass
-class YoLinkHomeStore:
-    """YoLink home store."""
-
-    home_instance: YoLinkHome
-    device_coordinators: dict[str, YoLinkCoordinator]
-
-
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up YoLink."""
 
@@ -117,16 +106,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: YoLinkConfigEntry) -> bool:
     """Set up yolink from a config entry."""
-    hass.data.setdefault(DOMAIN, {})
-    implementation = (
-        await config_entry_oauth2_flow.async_get_config_entry_implementation(
-            hass, entry
-        )
-    )
+    try:
+        implementation = await async_get_config_entry_implementation(hass, entry)
+    except ImplementationUnavailableError as err:
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key="oauth2_implementation_unavailable",
+        ) from err
 
-    session = config_entry_oauth2_flow.OAuth2Session(hass, entry, implementation)
+    session = OAuth2Session(hass, entry, implementation)
 
     auth_mgr = api.ConfigEntryAuth(
         hass, aiohttp_client.async_get_clientsession(hass), session
@@ -168,9 +158,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Not failure by fetching device state
             device_coordinator.data = {}
         device_coordinators[device.device_id] = device_coordinator
-    hass.data[DOMAIN][entry.entry_id] = YoLinkHomeStore(
-        yolink_home, device_coordinators
-    )
+    entry.runtime_data = YoLinkHomeStore(yolink_home, device_coordinators)
 
     # Clean up yolink devices which are not associated to the account anymore.
     device_registry = dr.async_get(hass)
@@ -198,9 +186,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: YoLinkConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        await hass.data[DOMAIN][entry.entry_id].home_instance.async_unload()
-        hass.data[DOMAIN].pop(entry.entry_id)
+        await entry.runtime_data.home_instance.async_unload()
     return unload_ok

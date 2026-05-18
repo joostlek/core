@@ -264,7 +264,8 @@ async def test_block_set_state_connection_error(
 
     with pytest.raises(
         HomeAssistantError,
-        match="Device communication error occurred while calling action for switch.test_name_channel_1 of Test name",
+        match="Device communication error occurred while calling"
+        " action for switch.test_name_channel_1 of Test name",
     ):
         await hass.services.async_call(
             SWITCH_DOMAIN,
@@ -497,11 +498,13 @@ async def test_rpc_device_switch_type_lights_mode(
     [
         (
             DeviceConnectionError,
-            "Device communication error occurred while calling action for switch.test_name_test_switch_0 of Test name",
+            "Device communication error occurred while calling action"
+            " for switch.test_name_test_switch_0 of Test name",
         ),
         (
             RpcCallError(-1, "error"),
-            "RPC call error occurred while calling action for switch.test_name_test_switch_0 of Test name",
+            "RPC call error occurred while calling action"
+            " for switch.test_name_test_switch_0 of Test name",
         ),
     ],
 )
@@ -568,6 +571,7 @@ async def test_wall_display_relay_mode(
     """Test Wall Display in relay mode."""
     climate_entity_id = "climate.test_name"
     switch_entity_id = "switch.test_name_test_switch_0"
+    monkeypatch.delitem(mock_rpc_device.status, "cover:0")
 
     config_entry = await init_integration(hass, 2, model=MODEL_WALL_DISPLAY)
 
@@ -577,7 +581,6 @@ async def test_wall_display_relay_mode(
     new_status = deepcopy(mock_rpc_device.status)
     new_status["sys"]["relay_in_thermostat"] = False
     new_status.pop("thermostat:0")
-    new_status.pop("cover:0")
     monkeypatch.setattr(mock_rpc_device, "status", new_status)
 
     await hass.config_entries.async_reload(config_entry.entry_id)
@@ -687,7 +690,7 @@ async def test_rpc_remove_virtual_switch_when_mode_label(
     mock_rpc_device: Mock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test if the virtual switch will be removed if the mode has been changed to a label."""
+    """Test virtual switch removal when mode changes to label."""
     config = deepcopy(mock_rpc_device.config)
     config["boolean:200"] = {"name": None, "meta": {"ui": {"view": "label"}}}
     monkeypatch.setattr(mock_rpc_device, "config", config)
@@ -719,7 +722,7 @@ async def test_rpc_remove_virtual_switch_when_orphaned(
     device_registry: DeviceRegistry,
     mock_rpc_device: Mock,
 ) -> None:
-    """Check whether the virtual switch will be removed if it has been removed from the device configuration."""
+    """Test virtual switch removal from device configuration."""
     config_entry = await init_integration(hass, 3, skip_setup=True)
 
     # create orphaned entity on main device
@@ -829,6 +832,7 @@ async def test_cury_switch_entity(
     status = {
         "cury:0": {
             "id": 0,
+            "away_mode": False,
             "slots": {
                 "left": {
                     "intensity": 70,
@@ -848,7 +852,13 @@ async def test_cury_switch_entity(
     monkeypatch.setattr(mock_rpc_device, "status", status)
     await init_integration(hass, 3)
 
-    for entity in ("left_slot", "left_slot_boost", "right_slot", "right_slot_boost"):
+    for entity in (
+        "away_mode",
+        "left_slot",
+        "left_slot_boost",
+        "right_slot",
+        "right_slot_boost",
+    ):
         entity_id = f"{SWITCH_DOMAIN}.test_name_{entity}"
 
         state = hass.states.get(entity_id)

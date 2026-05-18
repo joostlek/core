@@ -54,6 +54,10 @@ async def test_user_api_key(
             CONF_NAME: NAME,
             CONF_SITE_ID: SITE_ID,
             CONF_SECTION_API_AUTH: {CONF_API_KEY: API_KEY},
+            CONF_SECTION_WEB_AUTH: {
+                CONF_USERNAME: "",
+                CONF_PASSWORD: "",
+            },
         },
     )
     assert result.get("type") is FlowResultType.CREATE_ENTRY
@@ -85,6 +89,7 @@ async def test_user_web_login(
         {
             CONF_NAME: NAME,
             CONF_SITE_ID: SITE_ID,
+            CONF_SECTION_API_AUTH: {CONF_API_KEY: ""},
             CONF_SECTION_WEB_AUTH: {
                 CONF_USERNAME: USERNAME,
                 CONF_PASSWORD: PASSWORD,
@@ -168,7 +173,7 @@ async def test_abort_if_already_setup(
 async def test_ignored_entry_does_not_cause_error(
     recorder_mock: Recorder, hass: HomeAssistant
 ) -> None:
-    """Test an ignored entry does not cause and error and we can still create an new entry."""
+    """Test an ignored entry does not cause an error on new entry."""
     MockConfigEntry(
         domain="solaredge",
         data={CONF_NAME: DEFAULT_NAME, CONF_API_KEY: API_KEY},

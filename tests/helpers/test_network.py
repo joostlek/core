@@ -620,7 +620,7 @@ async def test_get_request_host_without_port(hass: HomeAssistant) -> None:
 
 
 async def test_get_request_ipv6_address(hass: HomeAssistant) -> None:
-    """Test getting the ipv6 host of the current web request from the request context."""
+    """Test getting the ipv6 host of the current web request."""
     with pytest.raises(NoURLAvailableError):
         _get_request_host()
 
@@ -635,7 +635,7 @@ async def test_get_request_ipv6_address(hass: HomeAssistant) -> None:
 
 
 async def test_get_request_ipv6_address_without_port(hass: HomeAssistant) -> None:
-    """Test getting the ipv6 host of the current web request from the request context."""
+    """Test getting the ipv6 host of the current web request."""
     with pytest.raises(NoURLAvailableError):
         _get_request_host()
 
@@ -663,7 +663,7 @@ async def test_get_request_host_no_host_header(hass: HomeAssistant) -> None:
         assert _get_request_host() is None
 
 
-@patch("homeassistant.components.hassio.is_hassio", Mock(return_value=True))
+@patch("homeassistant.helpers.hassio.is_hassio", Mock(return_value=True))
 @patch(
     "homeassistant.components.hassio.get_host_info",
     Mock(return_value={"hostname": "homeassistant"}),

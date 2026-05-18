@@ -1,7 +1,5 @@
 """Config flow for Droplet integration."""
 
-from __future__ import annotations
-
 from typing import Any
 
 from pydroplet.droplet import DropletConnection, DropletDiscovery
@@ -13,6 +11,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import DOMAIN
+
+
+def normalize_pairing_code(code: str) -> str:
+    """Normalize pairing code by removing spaces and capitalizing."""
+    return code.replace(" ", "").upper()
 
 
 class DropletConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -52,14 +55,13 @@ class DropletConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             # Test if we can connect before returning
             session = async_get_clientsession(self.hass)
-            if await self._droplet_discovery.try_connect(
-                session, user_input[CONF_CODE]
-            ):
+            code = normalize_pairing_code(user_input[CONF_CODE])
+            if await self._droplet_discovery.try_connect(session, code):
                 device_data = {
                     CONF_IP_ADDRESS: self._droplet_discovery.host,
                     CONF_PORT: self._droplet_discovery.port,
                     CONF_DEVICE_ID: device_id,
-                    CONF_CODE: user_input[CONF_CODE],
+                    CONF_CODE: code,
                 }
 
                 return self.async_create_entry(
@@ -90,14 +92,15 @@ class DropletConfigFlow(ConfigFlow, domain=DOMAIN):
                 user_input[CONF_IP_ADDRESS], DropletConnection.DEFAULT_PORT, ""
             )
             session = async_get_clientsession(self.hass)
-            if await self._droplet_discovery.try_connect(
-                session, user_input[CONF_CODE]
-            ) and (device_id := await self._droplet_discovery.get_device_id()):
+            code = normalize_pairing_code(user_input[CONF_CODE])
+            if await self._droplet_discovery.try_connect(session, code) and (
+                device_id := await self._droplet_discovery.get_device_id()
+            ):
                 device_data = {
                     CONF_IP_ADDRESS: self._droplet_discovery.host,
                     CONF_PORT: self._droplet_discovery.port,
                     CONF_DEVICE_ID: device_id,
-                    CONF_CODE: user_input[CONF_CODE],
+                    CONF_CODE: code,
                 }
                 await self.async_set_unique_id(device_id, raise_on_progress=False)
                 self._abort_if_unique_id_configured(

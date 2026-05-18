@@ -1,16 +1,16 @@
 """unifiprotect.repairs."""
 
-from __future__ import annotations
-
 from typing import cast
 
 from uiprotect import ProtectApiClient
 from uiprotect.data import Bootstrap, Camera
 import voluptuous as vol
 
-from homeassistant import data_entry_flow
-from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.repairs import (
+    ConfirmRepairFlow,
+    RepairsFlow,
+    RepairsFlowResult,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
@@ -48,14 +48,14 @@ class CloudAccountRepair(ProtectRepair):
 
     async def async_step_init(
         self, user_input: dict[str, str] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the first step of a fix flow."""
 
         return await self.async_step_confirm()
 
     async def async_step_confirm(
         self, user_input: dict[str, str] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the first step of a fix flow."""
 
         if user_input is None:
@@ -118,14 +118,14 @@ class RTSPRepair(ProtectRepair):
 
     async def async_step_init(
         self, user_input: dict[str, str] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the first step of a fix flow."""
 
         return await self.async_step_start()
 
     async def async_step_start(
         self, user_input: dict[str, str] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the first step of a fix flow."""
 
         if user_input is None:
@@ -150,7 +150,7 @@ class RTSPRepair(ProtectRepair):
 
     async def async_step_confirm(
         self, user_input: dict[str, str] | None = None
-    ) -> data_entry_flow.FlowResult:
+    ) -> RepairsFlowResult:
         """Handle the confirm step of a fix flow."""
         if user_input is not None:
             return self.async_create_entry(data={})
@@ -165,7 +165,7 @@ class RTSPRepair(ProtectRepair):
 
 @callback
 def _async_get_or_create_api_client(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: UFPConfigEntry
 ) -> ProtectApiClient:
     """Get or create an API client."""
     if data := async_get_data_for_entry_id(hass, entry.entry_id):

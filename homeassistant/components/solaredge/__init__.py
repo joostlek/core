@@ -1,7 +1,5 @@
 """The SolarEdge integration."""
 
-from __future__ import annotations
-
 import socket
 
 from aiohttp import ClientError
@@ -57,4 +55,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarEdgeConfigEntry) ->
 
 async def async_unload_entry(hass: HomeAssistant, entry: SolarEdgeConfigEntry) -> bool:
     """Unload SolarEdge config entry."""
+    if DATA_API_CLIENT not in entry.runtime_data:
+        return True  # Nothing to unload
+
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

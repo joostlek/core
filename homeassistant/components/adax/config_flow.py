@@ -1,7 +1,5 @@
 """Config flow for Adax integration."""
 
-from __future__ import annotations
-
 import logging
 from typing import Any
 
@@ -17,6 +15,11 @@ from homeassistant.const import (
     CONF_UNIQUE_ID,
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
 from .const import (
     ACCOUNT_ID,
@@ -66,7 +69,15 @@ class AdaxConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle the local step."""
         data_schema = vol.Schema(
-            {vol.Required(WIFI_SSID): str, vol.Required(WIFI_PSWD): str}
+            {
+                vol.Required(WIFI_SSID): str,
+                vol.Required(WIFI_PSWD): TextSelector(
+                    TextSelectorConfig(
+                        type=TextSelectorType.PASSWORD,
+                        autocomplete="current-password",
+                    ),
+                ),
+            }
         )
         if user_input is None:
             return self.async_show_form(
@@ -74,7 +85,7 @@ class AdaxConfigFlow(ConfigFlow, domain=DOMAIN):
                 data_schema=data_schema,
             )
 
-        wifi_ssid = user_input[WIFI_SSID].replace(" ", "")
+        wifi_ssid = user_input[WIFI_SSID]
         wifi_pswd = user_input[WIFI_PSWD].replace(" ", "")
         configurator = adax_local.AdaxConfig(wifi_ssid, wifi_pswd)
 

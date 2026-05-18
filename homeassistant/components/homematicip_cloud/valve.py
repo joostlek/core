@@ -42,18 +42,26 @@ class HomematicipWateringValve(HomematicipGenericEntity, ValveEntity):
     def __init__(self, hap: HomematicipHAP, device: Device, channel: int) -> None:
         """Initialize the valve."""
         super().__init__(
-            hap, device=device, channel=channel, post="watering", is_multi_channel=True
+            hap,
+            device=device,
+            channel=channel,
+            post="watering",
+            is_multi_channel=True,
+            feature_id="watering",
         )
 
     async def async_open_valve(self) -> None:
         """Open the valve."""
-        await self.functional_channel.set_watering_switch_state_async(True)
+        channel = self.get_channel_or_raise()
+        await channel.set_watering_switch_state_async(True)
 
     async def async_close_valve(self) -> None:
         """Close valve."""
-        await self.functional_channel.set_watering_switch_state_async(False)
+        channel = self.get_channel_or_raise()
+        await channel.set_watering_switch_state_async(False)
 
     @property
     def is_closed(self) -> bool:
         """Return if the valve is closed."""
-        return self.functional_channel.wateringActive is False
+        channel = self.get_channel_or_raise()
+        return channel.wateringActive is False

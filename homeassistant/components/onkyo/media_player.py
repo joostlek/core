@@ -1,10 +1,8 @@
 """Media player platform."""
 
-from __future__ import annotations
-
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aioonkyo import Code, Kind, Status, Zone, command, query, status
 
@@ -14,11 +12,11 @@ from homeassistant.components.media_player import (
     MediaPlayerState,
     MediaType,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util.hass_dict import HassKey
 
-from . import OnkyoConfigEntry
 from .const import (
     DOMAIN,
     LEGACY_HDMI_OUTPUT_MAPPING,
@@ -31,10 +29,15 @@ from .const import (
     VolumeResolution,
 )
 from .receiver import ReceiverManager
-from .services import DATA_MP_ENTITIES
 from .util import get_meaning
 
+if TYPE_CHECKING:
+    from . import OnkyoConfigEntry
+
 _LOGGER = logging.getLogger(__name__)
+
+
+DATA_MP_ENTITIES: HassKey[dict[str, dict[Zone, OnkyoMediaPlayer]]] = HassKey(DOMAIN)
 
 
 SUPPORTED_FEATURES_BASE = (
@@ -60,7 +63,8 @@ ATTR_AUDIO_INFORMATION = "audio_information"
 ATTR_VIDEO_INFORMATION = "video_information"
 ATTR_VIDEO_OUT = "video_out"
 
-AUDIO_VIDEO_INFORMATION_UPDATE_WAIT_TIME = 8
+QUERY_STATE_DELAY = 4
+QUERY_AV_INFO_DELAY = 8
 
 AUDIO_INFORMATION_MAPPING = [
     "audio_input_port",
@@ -94,7 +98,7 @@ async def async_setup_entry(
     entry: OnkyoConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up MediaPlayer for config entry."""
+    """Set up media player platform for config entry."""
     data = entry.runtime_data
 
     manager = data.manager
@@ -102,6 +106,12 @@ async def async_setup_entry(
 
     entities: dict[Zone, OnkyoMediaPlayer] = {}
     all_entities[entry.entry_id] = entities
+
+    @callback
+    def del_mp_entities() -> None:
+        del all_entities[entry.entry_id]
+
+    entry.async_on_unload(del_mp_entities)
 
     volume_resolution: VolumeResolution = entry.options[OPTION_VOLUME_RESOLUTION]
     max_volume: float = entry.options[OPTION_MAX_VOLUME]
@@ -112,7 +122,13 @@ async def async_setup_entry(
         if reconnect:
             for entity in entities.values():
                 if entity.enabled:
-                    await entity.backfill_state()
+                    await entity.query_state()
+
+    async def disconnect_callback() -> None:
+        for entity in entities.values():
+            if entity.enabled:
+                entity.cancel_tasks()
+                entity.async_write_ha_state()
 
     async def update_callback(message: Status) -> None:
         if isinstance(message, status.Raw):
@@ -125,7 +141,8 @@ async def async_setup_entry(
             if entity.enabled:
                 entity.process_update(message)
         elif not isinstance(message, status.NotAvailable):
-            # When we receive a valid status for a zone, then that zone is available on the receiver,
+            # When we receive a valid status for a zone, then
+            # that zone is available on the receiver,
             # so we create the entity for it.
             _LOGGER.debug(
                 "Discovered %s on %s (%s)",
@@ -145,6 +162,7 @@ async def async_setup_entry(
             async_add_entities([zone_entity])
 
     manager.callbacks.connect.append(connect_callback)
+    manager.callbacks.disconnect.append(disconnect_callback)
     manager.callbacks.update.append(update_callback)
 
 
@@ -160,7 +178,8 @@ class OnkyoMediaPlayer(MediaPlayerEntity):
     _supports_audio_info: bool = False
     _supports_video_info: bool = False
 
-    _query_task: asyncio.Task | None = None
+    _query_state_task: asyncio.Task | None = None
+    _query_av_info_task: asyncio.Task | None = None
 
     def __init__(
         self,
@@ -220,20 +239,19 @@ class OnkyoMediaPlayer(MediaPlayerEntity):
 
     async def async_added_to_hass(self) -> None:
         """Entity has been added to hass."""
-        await self.backfill_state()
+        await self.query_state()
 
     async def async_will_remove_from_hass(self) -> None:
-        """Cancel the query timer when the entity is removed."""
-        if self._query_task:
-            self._query_task.cancel()
-            self._query_task = None
+        """Entity will be removed from hass."""
+        self.cancel_tasks()
 
-    async def backfill_state(self) -> None:
-        """Get the receiver to send all the info we care about.
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self._manager.connected
 
-        Usually run only on connect, as we can otherwise rely on the
-        receiver to keep us informed of changes.
-        """
+    async def query_state(self) -> None:
+        """Query the receiver for all the info, that we care about."""
         await self._manager.write(query.Power(self._zone))
         await self._manager.write(query.Volume(self._zone))
         await self._manager.write(query.Muting(self._zone))
@@ -245,6 +263,15 @@ class OnkyoMediaPlayer(MediaPlayerEntity):
             await self._manager.write(query.HDMIOutput())
             await self._manager.write(query.AudioInformation())
             await self._manager.write(query.VideoInformation())
+
+    def cancel_tasks(self) -> None:
+        """Cancel the tasks."""
+        if self._query_state_task is not None:
+            self._query_state_task.cancel()
+            self._query_state_task = None
+        if self._query_av_info_task is not None:
+            self._query_av_info_task.cancel()
+            self._query_av_info_task = None
 
     async def async_turn_on(self) -> None:
         """Turn the media player on."""
@@ -342,6 +369,8 @@ class OnkyoMediaPlayer(MediaPlayerEntity):
         """Process update."""
         match message:
             case status.Power(param=status.Power.Param.ON):
+                if self.state != MediaPlayerState.ON:
+                    self._query_state_delayed()
                 self._attr_state = MediaPlayerState.ON
             case status.Power(param=status.Power.Param.STANDBY):
                 self._attr_state = MediaPlayerState.OFF
@@ -365,7 +394,8 @@ class OnkyoMediaPlayer(MediaPlayerEntity):
                 else:
                     source_meaning = get_meaning(source)
                     _LOGGER.warning(
-                        'Input source "%s" for entity: %s is not in the list. Check integration options',
+                        'Input source "%s" for entity: %s is not'
+                        " in the list. Check integration options",
                         source_meaning,
                         self.entity_id,
                     )
@@ -385,7 +415,9 @@ class OnkyoMediaPlayer(MediaPlayerEntity):
                 else:
                     sound_mode_meaning = get_meaning(sound_mode)
                     _LOGGER.warning(
-                        'Listening mode "%s" for entity: %s is not in the list. Check integration options',
+                        'Listening mode "%s" for entity: %s is'
+                        " not in the list. Check integration"
+                        " options",
                         sound_mode_meaning,
                         self.entity_id,
                     )
@@ -437,15 +469,28 @@ class OnkyoMediaPlayer(MediaPlayerEntity):
 
         self.async_write_ha_state()
 
+    def _query_state_delayed(self) -> None:
+        if self._query_state_task is not None:
+            self._query_state_task.cancel()
+            self._query_state_task = None
+
+        async def coro() -> None:
+            await asyncio.sleep(QUERY_STATE_DELAY)
+            await self.query_state()
+            self._query_state_task = None
+
+        self._query_state_task = asyncio.create_task(coro())
+
     def _query_av_info_delayed(self) -> None:
-        if self._zone == Zone.MAIN and not self._query_task:
+        if self._zone is not Zone.MAIN or self._query_av_info_task is not None:
+            return
 
-            async def _query_av_info() -> None:
-                await asyncio.sleep(AUDIO_VIDEO_INFORMATION_UPDATE_WAIT_TIME)
-                if self._supports_audio_info:
-                    await self._manager.write(query.AudioInformation())
-                if self._supports_video_info:
-                    await self._manager.write(query.VideoInformation())
-                self._query_task = None
+        async def coro() -> None:
+            await asyncio.sleep(QUERY_AV_INFO_DELAY)
+            if self._supports_audio_info:
+                await self._manager.write(query.AudioInformation())
+            if self._supports_video_info:
+                await self._manager.write(query.VideoInformation())
+            self._query_av_info_task = None
 
-            self._query_task = asyncio.create_task(_query_av_info())
+        self._query_av_info_task = asyncio.create_task(coro())

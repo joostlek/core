@@ -1,7 +1,5 @@
 """Config flow for Alexa Devices integration."""
 
-from __future__ import annotations
-
 from collections.abc import Mapping
 from typing import Any
 
@@ -45,7 +43,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         data[CONF_PASSWORD],
     )
 
-    return await api.login_mode_interactive(data[CONF_CODE])
+    return await api.login.login_mode_interactive(data[CONF_CODE])
 
 
 class AmazonDevicesConfigFlow(ConfigFlow, domain=DOMAIN):

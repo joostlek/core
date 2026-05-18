@@ -1,7 +1,5 @@
 """Binary sensor platform for hvv_departures."""
 
-from __future__ import annotations
-
 import asyncio
 from datetime import timedelta
 import logging
@@ -112,6 +110,7 @@ async def async_setup_entry(
         update_method=async_update_data,
         # Polling interval. Will only be polled if there are subscribers.
         update_interval=timedelta(hours=1),
+        config_entry=entry,
     )
 
     # Fetch initial data so we have data when entities subscribe
@@ -153,7 +152,7 @@ class HvvDepartureBinarySensor(CoordinatorEntity, BinarySensorEntity):
         )
 
     @property
-    def is_on(self):
+    def is_on(self) -> bool:
         """Return entity state."""
         return self.coordinator.data[self.idx]["state"]
 

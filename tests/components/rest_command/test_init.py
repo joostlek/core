@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import aiohttp
 import pytest
+from yarl import URL
 
 from homeassistant.components.rest_command import DOMAIN
 from homeassistant.const import (
@@ -142,7 +143,8 @@ async def test_rest_command_digest_auth(
 
     await setup_component(config)
 
-    # Mock the digest auth behavior - the request will be called with DigestAuthMiddleware
+    # Mock the digest auth behavior - the request will be called
+    # with DigestAuthMiddleware
     with patch("aiohttp.ClientSession.get") as mock_get:
 
         async def async_iter_chunks(self, chunk_size):
@@ -455,3 +457,34 @@ async def test_rest_command_response_iter_chunked(
 
         # Verify iter_chunked was called with a chunk size
         assert mock_iter_chunked.called
+
+
+async def test_rest_command_skip_url_encoding(
+    hass: HomeAssistant,
+    setup_component: ComponentSetup,
+    aioclient_mock: AiohttpClientMocker,
+) -> None:
+    """Check URL encoding."""
+    config = {
+        "skip_url_encoding_test": {
+            "url": "0%2C",
+            "method": "get",
+            "skip_url_encoding": True,
+        },
+        "with_url_encoding_test": {
+            "url": "1,",
+            "method": "get",
+        },
+    }
+
+    await setup_component(config)
+
+    aioclient_mock.get(URL("0%2C", encoded=True), content=b"success")
+    aioclient_mock.get(URL("1,"), content=b"success")
+
+    await hass.services.async_call(DOMAIN, "skip_url_encoding_test", {}, blocking=True)
+    await hass.services.async_call(DOMAIN, "with_url_encoding_test", {}, blocking=True)
+
+    assert len(aioclient_mock.mock_calls) == 2
+    assert str(aioclient_mock.mock_calls[0][1]) == "0%2C"
+    assert str(aioclient_mock.mock_calls[1][1]) == "1,"

@@ -9,7 +9,7 @@ import aiohttp
 import pytest
 from voluptuous.error import MultipleInvalid
 
-from homeassistant.components.color_extractor import (
+from homeassistant.components.color_extractor.services import (
     ATTR_PATH,
     ATTR_URL,
     DOMAIN,
@@ -124,7 +124,8 @@ async def _async_execute_service(hass: HomeAssistant, service_data: dict[str, An
     assert state
     assert state.state == STATE_OFF
 
-    # Call the shared service, our above mock should return the base64 decoded fixture 1x1 pixel
+    # Call the shared service, our above mock should return
+    # the base64 decoded fixture 1x1 pixel
     await hass.services.async_call(DOMAIN, SERVICE_TURN_ON, service_data, blocking=True)
 
     await hass.async_block_till_done()
@@ -270,7 +271,9 @@ async def test_file(hass: HomeAssistant, setup_integration) -> None:
     assert state.state == STATE_OFF
 
     # Mock the file handler read with our 1x1 base64 encoded fixture image
-    with patch("homeassistant.components.color_extractor._get_file", _get_file_mock):
+    with patch(
+        "homeassistant.components.color_extractor.services._get_file", _get_file_mock
+    ):
         await hass.services.async_call(DOMAIN, SERVICE_TURN_ON, service_data)
         await hass.async_block_till_done()
 
@@ -291,7 +294,7 @@ async def test_file(hass: HomeAssistant, setup_integration) -> None:
 @patch("os.path.isfile", Mock(return_value=True))
 @patch("os.access", Mock(return_value=True))
 async def test_file_denied_dir(hass: HomeAssistant, setup_integration) -> None:
-    """Test that the file only service fails to read an image in a dir not explicitly allowed."""
+    """Test file service fails for images in disallowed dirs."""
     service_data = {
         ATTR_PATH: "/path/to/a/dir/not/allowed/image.png",
         ATTR_ENTITY_ID: LIGHT_ENTITY,
@@ -305,7 +308,9 @@ async def test_file_denied_dir(hass: HomeAssistant, setup_integration) -> None:
     assert state.state == STATE_OFF
 
     # Mock the file handler read with our 1x1 base64 encoded fixture image
-    with patch("homeassistant.components.color_extractor._get_file", _get_file_mock):
+    with patch(
+        "homeassistant.components.color_extractor.services._get_file", _get_file_mock
+    ):
         await hass.services.async_call(DOMAIN, SERVICE_TURN_ON, service_data)
         await hass.async_block_till_done()
 

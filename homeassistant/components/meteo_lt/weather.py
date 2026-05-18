@@ -1,7 +1,5 @@
 """Weather platform for Meteo.lt integration."""
 
-from __future__ import annotations
-
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
@@ -129,7 +127,8 @@ class MeteoLtWeatherEntity(CoordinatorEntity[MeteoLtUpdateCoordinator], WeatherE
 
     async def async_forecast_daily(self) -> list[Forecast] | None:
         """Return the daily forecast."""
-        # Using hourly data to create daily summaries, since daily data is not provided directly
+        # Using hourly data to create daily summaries, since
+        # daily data is not provided directly
         if not self.coordinator.data:
             return None
 
@@ -139,7 +138,7 @@ class MeteoLtWeatherEntity(CoordinatorEntity[MeteoLtUpdateCoordinator], WeatherE
             forecasts_by_date[date].append(timestamp)
 
         daily_forecasts = []
-        for date in sorted(forecasts_by_date.keys())[:5]:
+        for date in sorted(forecasts_by_date.keys()):
             day_forecasts = forecasts_by_date[date]
             if not day_forecasts:
                 continue
@@ -186,5 +185,5 @@ class MeteoLtWeatherEntity(CoordinatorEntity[MeteoLtUpdateCoordinator], WeatherE
             return None
         return [
             self._convert_forecast_data(forecast_data)
-            for forecast_data in self.coordinator.data.forecast_timestamps[:24]
+            for forecast_data in self.coordinator.data.forecast_timestamps
         ]

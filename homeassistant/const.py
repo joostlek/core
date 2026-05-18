@@ -1,18 +1,9 @@
 """Constants used by Home Assistant components."""
 
-from __future__ import annotations
-
 from enum import StrEnum
-from functools import partial
 from typing import TYPE_CHECKING, Final
 
 from .generated.entity_platforms import EntityPlatforms
-from .helpers.deprecation import (
-    DeprecatedConstantEnum,
-    all_with_deprecated_constants,
-    check_if_deprecated_constant,
-    dir_with_deprecated_constants,
-)
 from .util.event_type import EventType
 from .util.hass_dict import HassKey
 from .util.signal_type import SignalType
@@ -22,15 +13,12 @@ if TYPE_CHECKING:
     from .helpers.typing import NoEventData
 
 APPLICATION_NAME: Final = "HomeAssistant"
-MAJOR_VERSION: Final = 2025
-MINOR_VERSION: Final = 12
+MAJOR_VERSION: Final = 2026
+MINOR_VERSION: Final = 6
 PATCH_VERSION: Final = "0.dev0"
 __short_version__: Final = f"{MAJOR_VERSION}.{MINOR_VERSION}"
 __version__: Final = f"{__short_version__}.{PATCH_VERSION}"
-REQUIRED_PYTHON_VER: Final[tuple[int, int, int]] = (3, 13, 2)
-REQUIRED_NEXT_PYTHON_VER: Final[tuple[int, int, int]] = (3, 13, 2)
-# Truthy date string triggers showing related deprecation warning messages.
-REQUIRED_NEXT_PYTHON_HA_RELEASE: Final = ""
+REQUIRED_PYTHON_VER: Final[tuple[int, int, int]] = (3, 14, 2)
 
 # Format for platform files
 PLATFORM_FORMAT: Final = "{platform}.{domain}"
@@ -278,6 +266,7 @@ EVENT_HOMEASSISTANT_STOP: EventType[NoEventData] = EventType("homeassistant_stop
 EVENT_HOMEASSISTANT_FINAL_WRITE: EventType[NoEventData] = EventType(
     "homeassistant_final_write"
 )
+EVENT_LABS_UPDATED: Final = "labs_updated"
 EVENT_LOGBOOK_ENTRY: Final = "logbook_entry"
 EVENT_LOGGING_CHANGED: Final = "logging_changed"
 EVENT_SERVICE_REGISTERED: Final = "service_registered"
@@ -340,6 +329,9 @@ ATTR_NAME: Final = "name"
 
 # Contains one string or a list of strings, each being an entity id
 ATTR_ENTITY_ID: Final = "entity_id"
+
+# Contains a list of entity ids that are members of a group
+ATTR_GROUP_ENTITIES: Final = "group_entities"
 
 # Contains one string, the config entry ID
 ATTR_CONFIG_ENTRY_ID: Final = "config_entry_id"
@@ -529,6 +521,7 @@ class UnitOfEnergyDistance(StrEnum):
 class UnitOfElectricCurrent(StrEnum):
     """Electric current units."""
 
+    MICROAMPERE = "μA"
     MILLIAMPERE = "mA"
     AMPERE = "A"
 
@@ -596,6 +589,7 @@ class UnitOfLength(StrEnum):
 class UnitOfFrequency(StrEnum):
     """Frequency units."""
 
+    MILLIHERTZ = "mHz"
     HERTZ = "Hz"
     KILOHERTZ = "kHz"
     MEGAHERTZ = "MHz"
@@ -660,6 +654,7 @@ class UnitOfVolumeFlowRate(StrEnum):
     LITERS_PER_SECOND = "L/s"
     GALLONS_PER_HOUR = "gal/h"
     GALLONS_PER_MINUTE = "gal/min"
+    GALLONS_PER_DAY = "gal/d"
     MILLILITERS_PER_SECOND = "mL/s"
 
 
@@ -1000,10 +995,3 @@ FORMAT_DATETIME: Final = f"{FORMAT_DATE} {FORMAT_TIME}"
 # This is not a hard limit, but caches and other
 # data structures will be pre-allocated to this size
 MAX_EXPECTED_ENTITY_IDS: Final = 16384
-
-# These can be removed if no deprecated constant are in this module anymore
-__getattr__ = partial(check_if_deprecated_constant, module_globals=globals())
-__dir__ = partial(
-    dir_with_deprecated_constants, module_globals_keys=[*globals().keys()]
-)
-__all__ = all_with_deprecated_constants(globals())

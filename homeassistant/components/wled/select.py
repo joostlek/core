@@ -1,7 +1,5 @@
 """Support for LED selects."""
 
-from __future__ import annotations
-
 from functools import partial
 
 from wled import LiveDataOverride
@@ -173,12 +171,9 @@ class WLEDPaletteSelect(WLEDEntity, SelectEntity):
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        try:
-            self.coordinator.data.state.segments[self._segment]
-        except KeyError:
-            return False
-
-        return super().available
+        return (
+            super().available and self._segment in self.coordinator.data.state.segments
+        )
 
     @property
     def current_option(self) -> str | None:
@@ -213,16 +208,10 @@ def async_update_segments(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Update segments."""
-    segment_ids = {
-        segment.segment_id
-        for segment in coordinator.data.state.segments.values()
-        if segment.segment_id is not None
-    }
-
     new_entities: list[WLEDPaletteSelect] = []
 
     # Process new segments, add them to Home Assistant
-    for segment_id in segment_ids - current_ids:
+    for segment_id in coordinator.segment_ids - current_ids:
         current_ids.add(segment_id)
         new_entities.append(WLEDPaletteSelect(coordinator, segment_id))
 

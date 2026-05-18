@@ -1,7 +1,5 @@
 """Support for BTHome binary sensors."""
 
-from __future__ import annotations
-
 from bthome_ble import (
     BinarySensorDeviceClass as BTHomeBinarySensorDeviceClass,
     SensorUpdate,
@@ -63,6 +61,7 @@ BINARY_SENSOR_DESCRIPTIONS = {
     ),
     BTHomeBinarySensorDeviceClass.GENERIC: BinarySensorEntityDescription(
         key=BTHomeBinarySensorDeviceClass.GENERIC,
+        translation_key="generic",
     ),
     BTHomeBinarySensorDeviceClass.LIGHT: BinarySensorEntityDescription(
         key=BTHomeBinarySensorDeviceClass.LIGHT,
@@ -152,17 +151,16 @@ def sensor_update_to_bluetooth_data_update(
             device_key_to_bluetooth_entity_key(device_key): BINARY_SENSOR_DESCRIPTIONS[
                 description.device_class
             ]
-            for device_key, description in sensor_update.binary_entity_descriptions.items()
+            for device_key, description in (
+                sensor_update.binary_entity_descriptions.items()
+            )
             if description.device_class
         },
         entity_data={
             device_key_to_bluetooth_entity_key(device_key): sensor_values.native_value
             for device_key, sensor_values in sensor_update.binary_entity_values.items()
         },
-        entity_names={
-            device_key_to_bluetooth_entity_key(device_key): sensor_values.name
-            for device_key, sensor_values in sensor_update.binary_entity_values.items()
-        },
+        entity_names={},
     )
 
 

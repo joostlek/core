@@ -1,9 +1,7 @@
 """ZHA radio manager."""
 
-from __future__ import annotations
-
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 import contextlib
 from contextlib import suppress
 import copy
@@ -172,7 +170,7 @@ class ZhaRadioManager:
     @contextlib.asynccontextmanager
     async def create_zigpy_app(
         self, *, connect: bool = True
-    ) -> AsyncIterator[ControllerApplication]:
+    ) -> AsyncGenerator[ControllerApplication]:
         """Connect to the radio with the current config and then clean up."""
         assert self.radio_type is not None
 
@@ -323,7 +321,7 @@ class ZhaRadioManager:
 
         return backup
 
-    async def async_form_network(self, config: dict[str, Any] | None) -> None:
+    async def async_form_network(self) -> None:
         """Form a brand-new network."""
 
         # When forming a new network, we delete the ZHA database to prevent old devices
@@ -332,7 +330,7 @@ class ZhaRadioManager:
             await self.hass.async_add_executor_job(os.remove, self.zigpy_database_path)
 
         async with self.create_zigpy_app() as app:
-            await app.form_network(config=config)
+            await app.form_network()
 
     async def async_reset_adapter(self) -> None:
         """Reset the current adapter."""
@@ -409,7 +407,7 @@ class ZhaMultiPANMigrationHelper:
                     create_backup=True
                 )
                 break
-            except OSError as err:
+            except (OSError, HomeAssistantError) as err:
                 if retry >= BACKUP_RETRIES - 1:
                     raise
 
@@ -450,7 +448,7 @@ class ZhaMultiPANMigrationHelper:
             try:
                 await self._radio_mgr.restore_backup(overwrite_ieee=True)
                 break
-            except OSError as err:
+            except (OSError, HomeAssistantError) as err:
                 if retry >= MIGRATION_RETRIES - 1:
                     raise
 

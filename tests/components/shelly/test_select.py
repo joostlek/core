@@ -9,12 +9,17 @@ import pytest
 from homeassistant.components.select import (
     ATTR_OPTION,
     ATTR_OPTIONS,
-    DOMAIN as SELECT_PLATFORM,
+    DOMAIN as SELECT_DOMAIN,
     SERVICE_SELECT_OPTION,
 )
 from homeassistant.components.shelly.const import DOMAIN
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
-from homeassistant.const import ATTR_ENTITY_ID, STATE_UNKNOWN, Platform
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    ATTR_FRIENDLY_NAME,
+    STATE_UNKNOWN,
+    Platform,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceRegistry
@@ -86,7 +91,7 @@ async def test_rpc_device_virtual_enum(
 
     monkeypatch.setitem(mock_rpc_device.status["enum:203"], "value", "option 1")
     await hass.services.async_call(
-        SELECT_PLATFORM,
+        SELECT_DOMAIN,
         SERVICE_SELECT_OPTION,
         {ATTR_ENTITY_ID: entity_id, ATTR_OPTION: "Title 1"},
         blocking=True,
@@ -107,7 +112,7 @@ async def test_rpc_remove_virtual_enum_when_mode_label(
     mock_rpc_device: Mock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test if the virtual enum will be removed if the mode has been changed to a label."""
+    """Test virtual enum removal when mode changes to label."""
     config = deepcopy(mock_rpc_device.config)
     config["enum:200"] = {
         "name": None,
@@ -126,7 +131,7 @@ async def test_rpc_remove_virtual_enum_when_mode_label(
     device_entry = register_device(device_registry, config_entry)
     entity_id = register_entity(
         hass,
-        SELECT_PLATFORM,
+        SELECT_DOMAIN,
         "test_name_enum_200",
         "enum:200-enum_generic",
         config_entry,
@@ -145,12 +150,12 @@ async def test_rpc_remove_virtual_enum_when_orphaned(
     device_registry: DeviceRegistry,
     mock_rpc_device: Mock,
 ) -> None:
-    """Check whether the virtual enum will be removed if it has been removed from the device configuration."""
+    """Test virtual enum removal from device configuration."""
     config_entry = await init_integration(hass, 3, skip_setup=True)
     device_entry = register_device(device_registry, config_entry)
     entity_id = register_entity(
         hass,
-        SELECT_PLATFORM,
+        SELECT_DOMAIN,
         "test_name_enum_200",
         "enum:200-enum_generic",
         config_entry,
@@ -168,11 +173,13 @@ async def test_rpc_remove_virtual_enum_when_orphaned(
     [
         (
             DeviceConnectionError,
-            "Device communication error occurred while calling action for select.test_name_enum_203 of Test name",
+            "Device communication error occurred while calling action"
+            " for select.test_name_enum_203 of Test name",
         ),
         (
             RpcCallError(999),
-            "RPC call error occurred while calling action for select.test_name_enum_203 of Test name",
+            "RPC call error occurred while calling action"
+            " for select.test_name_enum_203 of Test name",
         ),
     ],
 )
@@ -207,10 +214,10 @@ async def test_select_set_exc(
 
     with pytest.raises(HomeAssistantError, match=error):
         await hass.services.async_call(
-            SELECT_PLATFORM,
+            SELECT_DOMAIN,
             SERVICE_SELECT_OPTION,
             {
-                ATTR_ENTITY_ID: f"{SELECT_PLATFORM}.test_name_enum_203",
+                ATTR_ENTITY_ID: f"{SELECT_DOMAIN}.test_name_enum_203",
                 ATTR_OPTION: "option 2",
             },
             blocking=True,
@@ -245,10 +252,10 @@ async def test_select_set_reauth_error(
     mock_rpc_device.enum_set.side_effect = InvalidAuthError
 
     await hass.services.async_call(
-        SELECT_PLATFORM,
+        SELECT_DOMAIN,
         SERVICE_SELECT_OPTION,
         {
-            ATTR_ENTITY_ID: f"{SELECT_PLATFORM}.test_name_enum_203",
+            ATTR_ENTITY_ID: f"{SELECT_DOMAIN}.test_name_enum_203",
             ATTR_OPTION: "option 2",
         },
         blocking=True,
@@ -266,3 +273,59 @@ async def test_select_set_reauth_error(
     assert "context" in flow
     assert flow["context"].get("source") == SOURCE_REAUTH
     assert flow["context"].get("entry_id") == entry.entry_id
+
+
+async def test_rpc_cury_mode_select(
+    hass: HomeAssistant,
+    entity_registry: EntityRegistry,
+    mock_rpc_device: Mock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test Cury Mode select entity."""
+    entity_id = f"{SELECT_DOMAIN}.test_name_mode"
+    status = {"cury:0": {"id": 0, "mode": "hall"}}
+    monkeypatch.setattr(mock_rpc_device, "status", status)
+    await init_integration(hass, 3)
+
+    assert (state := hass.states.get(entity_id))
+    assert state.state == "hall"
+    assert state.attributes.get(ATTR_OPTIONS) == [
+        "hall",
+        "bedroom",
+        "living_room",
+        "lavatory_room",
+        "none",
+        "reception",
+        "workplace",
+    ]
+    assert state.attributes.get(ATTR_FRIENDLY_NAME) == "Test name Mode"
+
+    assert (entry := entity_registry.async_get(entity_id))
+    assert entry.unique_id == "123456789ABC-cury:0-cury_mode"
+    assert entry.translation_key == "cury_mode"
+
+    monkeypatch.setitem(mock_rpc_device.status["cury:0"], "mode", "living_room")
+    mock_rpc_device.mock_update()
+
+    assert (state := hass.states.get(entity_id))
+    assert state.state == "living_room"
+
+    monkeypatch.setitem(mock_rpc_device.status["cury:0"], "mode", "reception")
+    await hass.services.async_call(
+        SELECT_DOMAIN,
+        SERVICE_SELECT_OPTION,
+        {ATTR_ENTITY_ID: entity_id, ATTR_OPTION: "reception"},
+        blocking=True,
+    )
+
+    mock_rpc_device.cury_set_mode.assert_called_once_with(0, "reception")
+    mock_rpc_device.mock_update()
+
+    assert (state := hass.states.get(entity_id))
+    assert state.state == "reception"
+
+    monkeypatch.setitem(mock_rpc_device.status["cury:0"], "mode", None)
+    mock_rpc_device.mock_update()
+
+    assert (state := hass.states.get(entity_id))
+    assert state.state == "none"

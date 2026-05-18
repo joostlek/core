@@ -1,7 +1,5 @@
 """Matter ModeSelect Cluster Support."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
@@ -11,14 +9,26 @@ from chip.clusters.ClusterObjects import ClusterAttributeDescriptor, ClusterComm
 from chip.clusters.Types import Nullable
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .entity import MatterEntity, MatterEntityDescription
-from .helpers import get_matter
+from .helpers import MatterConfigEntry
 from .models import MatterDiscoverySchema
+
+DOOR_LOCK_OPERATING_MODE_MAP = {
+    clusters.DoorLock.Enums.OperatingModeEnum.kNormal: "normal",
+    clusters.DoorLock.Enums.OperatingModeEnum.kVacation: "vacation",
+    clusters.DoorLock.Enums.OperatingModeEnum.kPrivacy: "privacy",
+    clusters.DoorLock.Enums.OperatingModeEnum.kNoRemoteLockUnlock: (
+        "no_remote_lock_unlock"
+    ),
+    clusters.DoorLock.Enums.OperatingModeEnum.kPassage: "passage",
+}
+DOOR_LOCK_OPERATING_MODE_MAP_REVERSE = {
+    v: k for k, v in DOOR_LOCK_OPERATING_MODE_MAP.items()
+}
 
 NUMBER_OF_RINSES_STATE_MAP = {
     clusters.LaundryWasherControls.Enums.NumberOfRinsesEnum.kNone: "off",
@@ -30,6 +40,7 @@ NUMBER_OF_RINSES_STATE_MAP = {
 NUMBER_OF_RINSES_STATE_MAP_REVERSE = {
     v: k for k, v in NUMBER_OF_RINSES_STATE_MAP.items()
 }
+
 PUMP_OPERATION_MODE_MAP = {
     clusters.PumpConfigurationAndControl.Enums.OperationModeEnum.kNormal: "normal",
     clusters.PumpConfigurationAndControl.Enums.OperationModeEnum.kMinimum: "minimum",
@@ -54,11 +65,11 @@ type SelectCluster = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: MatterConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Matter ModeSelect from Config Entry."""
-    matter = get_matter(hass)
+    matter = config_entry.runtime_data.adapter
     matter.register_platform_handler(Platform.SELECT, async_add_entities)
 
 
@@ -74,7 +85,8 @@ class MatterMapSelectEntityDescription(MatterSelectEntityDescription):
     device_to_ha: Callable[[int], str | None]
     ha_to_device: Callable[[str], int | None]
 
-    # list attribute: the attribute descriptor to get the list of values (= list of integers)
+    # list attribute: the attribute descriptor to get the list
+    # of values (= list of integers)
     list_attribute: type[ClusterAttributeDescriptor]
 
 
@@ -82,11 +94,15 @@ class MatterMapSelectEntityDescription(MatterSelectEntityDescription):
 class MatterListSelectEntityDescription(MatterSelectEntityDescription):
     """Describe Matter select entities for MatterListSelectEntity."""
 
-    # list attribute: the attribute descriptor to get the list of values (= list of strings)
+    # list attribute: the attribute descriptor to get the list
+    # of values (= list of strings)
     list_attribute: type[ClusterAttributeDescriptor]
-    # command: a custom callback to create the command to send to the device
-    # the callback's argument will be the index of the selected list value
-    # if omitted the command will just be a write_attribute command to the primary attribute
+    # command: a custom callback to create the command to send
+    # to the device
+    # the callback's argument will be the index of the selected
+    # list value
+    # if omitted the command will just be a write_attribute
+    # command to the primary attribute
     command: Callable[[int], ClusterCommand] | None = None
 
 
@@ -116,7 +132,7 @@ class MatterAttributeSelectEntity(MatterEntity, SelectEntity):
 
 
 class MatterMapSelectEntity(MatterAttributeSelectEntity):
-    """Representation of a Matter select entity where the options are defined in a State map."""
+    """Matter select entity where options are from a State map."""
 
     entity_description: MatterMapSelectEntityDescription
 
@@ -134,7 +150,8 @@ class MatterMapSelectEntity(MatterAttributeSelectEntity):
             for value in available_values
             if (mapped_value := self.entity_description.device_to_ha(value))
         ]
-        # use base implementation from MatterAttributeSelectEntity to set the current option
+        # use base implementation from
+        # MatterAttributeSelectEntity to set the current option
         super()._update_from_device()
 
 
@@ -171,8 +188,50 @@ class MatterModeSelectEntity(MatterAttributeSelectEntity):
             self._attr_name = desc
 
 
+class MatterDoorLockOperatingModeSelectEntity(MatterAttributeSelectEntity):
+    """Representation of a Door Lock Operating Mode select entity.
+
+    This entity dynamically filters available operating modes based on the device's
+    `SupportedOperatingModes` bitmap attribute. In this bitmap, bit=0 indicates a
+    supported mode and bit=1 indicates unsupported (inverted from typical conventions).
+    If the bitmap is unavailable, only mandatory modes are included. The mapping from
+    bitmap bits to operating mode values is defined by the Matter specification.
+    """
+
+    entity_description: MatterMapSelectEntityDescription
+
+    @callback
+    def _update_from_device(self) -> None:
+        """Update from device."""
+        # Get the bitmap of supported operating modes
+        supported_modes_bitmap = self.get_matter_attribute_value(
+            self.entity_description.list_attribute
+        )
+
+        # Convert bitmap to list of supported mode values
+        # NOTE: The Matter spec inverts the usual meaning: bit=0 means supported,
+        # bit=1 means not supported, undefined bits must be 1. Mandatory modes are
+        # bits 0 (Normal) and 3 (NoRemoteLockUnlock).
+        num_mode_bits = supported_modes_bitmap.bit_length()
+        supported_mode_values = [
+            bit_position
+            for bit_position in range(num_mode_bits)
+            if not supported_modes_bitmap & (1 << bit_position)
+        ]
+
+        # Map supported mode values to their string representations
+        self._attr_options = [
+            mapped_value
+            for mode_value in supported_mode_values
+            if (mapped_value := self.entity_description.device_to_ha(mode_value))
+        ]
+
+        # Use base implementation to set the current option
+        super()._update_from_device()
+
+
 class MatterListSelectEntity(MatterEntity, SelectEntity):
-    """Representation of a select entity from Matter list and selected item Cluster attribute(s)."""
+    """Select entity from Matter list and selected item attributes."""
 
     entity_description: MatterListSelectEntityDescription
 
@@ -402,8 +461,10 @@ DISCOVERY_SCHEMAS = [
         entity_description=MatterListSelectEntityDescription(
             key="TemperatureControlSelectedTemperatureLevel",
             translation_key="temperature_level",
-            command=lambda selected_index: clusters.TemperatureControl.Commands.SetTemperature(
-                targetTemperatureLevel=selected_index
+            command=lambda selected_index: (
+                clusters.TemperatureControl.Commands.SetTemperature(
+                    targetTemperatureLevel=selected_index
+                )
             ),
             list_attribute=clusters.TemperatureControl.Attributes.SupportedTemperatureLevels,
         ),
@@ -452,8 +513,10 @@ DISCOVERY_SCHEMAS = [
         entity_description=MatterListSelectEntityDescription(
             key="MicrowaveOvenControlSelectedWattIndex",
             translation_key="power_level",
-            command=lambda selected_index: clusters.MicrowaveOvenControl.Commands.SetCookingParameters(
-                wattSettingIndex=selected_index
+            command=lambda selected_index: (
+                clusters.MicrowaveOvenControl.Commands.SetCookingParameters(
+                    wattSettingIndex=selected_index
+                )
             ),
             list_attribute=clusters.MicrowaveOvenControl.Attributes.SupportedWatts,
         ),
@@ -502,17 +565,24 @@ DISCOVERY_SCHEMAS = [
             clusters.PumpConfigurationAndControl.Attributes.OperationMode,
         ),
     ),
+    # Keep the legacy vendor-specific select entities until HA 2026.11.0,
+    # so existing users can migrate before we remove them in favor of the
+    # generic number slider.
     MatterDiscoverySchema(
         platform=Platform.SELECT,
         entity_description=MatterSelectEntityDescription(
             key="AqaraBooleanStateConfigurationCurrentSensitivityLevel",
             entity_category=EntityCategory.CONFIG,
+            entity_registry_enabled_default=False,
             translation_key="sensitivity_level",
             options=["10 mm", "20 mm", "30 mm"],
             device_to_ha={
-                0: "10 mm",  # 10 mm => CurrentSensitivityLevel=0 / highest sensitivity level
-                1: "20 mm",  # 20 mm => CurrentSensitivityLevel=1 / medium sensitivity level
-                2: "30 mm",  # 30 mm => CurrentSensitivityLevel=2 / lowest sensitivity level
+                # CurrentSensitivityLevel=0 / highest
+                0: "10 mm",
+                # CurrentSensitivityLevel=1 / medium
+                1: "20 mm",
+                # CurrentSensitivityLevel=2 / lowest
+                2: "30 mm",
             }.get,
             ha_to_device={
                 "10 mm": 0,
@@ -526,12 +596,14 @@ DISCOVERY_SCHEMAS = [
         ),
         vendor_id=(4447,),
         product_id=(8194,),
+        allow_multi=True,
     ),
     MatterDiscoverySchema(
         platform=Platform.SELECT,
         entity_description=MatterSelectEntityDescription(
             key="AqaraOccupancySensorBooleanStateConfigurationCurrentSensitivityLevel",
             entity_category=EntityCategory.CONFIG,
+            entity_registry_enabled_default=False,
             translation_key="sensitivity_level",
             options=["low", "standard", "high"],
             device_to_ha={
@@ -554,12 +626,14 @@ DISCOVERY_SCHEMAS = [
             8197,
             8195,
         ),
+        allow_multi=True,
     ),
     MatterDiscoverySchema(
         platform=Platform.SELECT,
         entity_description=MatterSelectEntityDescription(
             key="HeimanOccupancySensorBooleanStateConfigurationCurrentSensitivityLevel",
             entity_category=EntityCategory.CONFIG,
+            entity_registry_enabled_default=False,
             translation_key="sensitivity_level",
             options=["low", "standard", "high"],
             device_to_ha={
@@ -579,5 +653,22 @@ DISCOVERY_SCHEMAS = [
         ),
         vendor_id=(4619,),
         product_id=(4097,),
+        allow_multi=True,
+    ),
+    MatterDiscoverySchema(
+        platform=Platform.SELECT,
+        entity_description=MatterMapSelectEntityDescription(
+            key="DoorLockOperatingMode",
+            translation_key="door_lock_operating_mode",
+            list_attribute=clusters.DoorLock.Attributes.SupportedOperatingModes,
+            device_to_ha=DOOR_LOCK_OPERATING_MODE_MAP.get,
+            ha_to_device=DOOR_LOCK_OPERATING_MODE_MAP_REVERSE.get,
+            entity_category=EntityCategory.CONFIG,
+        ),
+        entity_class=MatterDoorLockOperatingModeSelectEntity,
+        required_attributes=(
+            clusters.DoorLock.Attributes.OperatingMode,
+            clusters.DoorLock.Attributes.SupportedOperatingModes,
+        ),
     ),
 ]

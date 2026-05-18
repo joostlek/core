@@ -1,7 +1,5 @@
 """Test Template config."""
 
-from __future__ import annotations
-
 import pytest
 import voluptuous as vol
 
@@ -133,7 +131,8 @@ async def test_invalid_default_entity_id(
                     "auto_off": "00:00:01",
                 },
             },
-            "The auto_off option for template binary sensor: name: Template Binary Sensor",
+            "The auto_off option for template binary sensor:"
+            " name: Template Binary Sensor",
         ),
         (
             {
@@ -174,7 +173,8 @@ async def test_invalid_default_entity_id(
                     "auto_off": "00:00:01",
                 },
             },
-            "The auto_off option for template binary sensor: default_entity_id: binary_sensor.test_entity_id",
+            "The auto_off option for template binary sensor:"
+            " default_entity_id: binary_sensor.test_entity_id",
         ),
         (
             {
@@ -197,7 +197,8 @@ async def test_invalid_default_entity_id(
                     "auto_off": "00:00:01",
                 },
             },
-            "The auto_off option for template binary sensor: default_entity_id: binary_sensor.test_entity_id",
+            "The auto_off option for template binary sensor:"
+            " default_entity_id: binary_sensor.test_entity_id",
         ),
     ],
 )
@@ -378,7 +379,7 @@ async def test_combined_trigger_variables(
 async def test_state_init_attribute_variables(
     hass: HomeAssistant,
 ) -> None:
-    """Test a state based template entity initializes icon, name, and picture with variables."""
+    """Test state based template entity initializes attributes with variables."""
     source = "switch.foo"
     entity_id = "sensor.foo"
 
@@ -398,7 +399,9 @@ async def test_state_init_attribute_variables(
                     },
                     "name": "{{ state_attr(switch, 'friendly_name') }}",
                     "icon": "{{ on_icon if is_state(switch, 'on') else off_icon }}",
-                    "picture": "{{ on_picture if is_state(switch, 'on') else off_picture }}",
+                    "picture": (
+                        "{{ on_picture if is_state(switch, 'on') else off_picture }}"
+                    ),
                     "state": "{{ is_state(switch, 'on') }}",
                 },
             }
@@ -438,7 +441,8 @@ async def test_state_init_attribute_variables(
             {
                 "trigger": {"trigger": "event", "event_type": "my_event"},
             },
-            "Invalid template configuration found, trigger option is missing matching domain",
+            "Invalid template configuration found, trigger option is"
+            " missing matching domain",
         ),
         (
             {
@@ -475,3 +479,86 @@ async def test_invalid_schema_raises_issue(
 
     assert issue.domain == "template"
     assert issue.severity == ir.IssueSeverity.WARNING
+
+
+async def test_multiple_configuration_keys(
+    hass: HomeAssistant,
+) -> None:
+    """Test multiple configurations keys create entities."""
+    await async_setup_component(
+        hass,
+        "template",
+        {
+            "template": [{"binary_sensor": [{"name": "Foo", "state": "{{ True }}"}]}],
+            "template mytemplates": [
+                {
+                    "sensor": [
+                        {"name": "Foo", "state": "{{ 'bar' }}"},
+                        {"name": "Bar", "state": "{{ 'foo' }}"},
+                    ]
+                }
+            ],
+            "template y": [
+                {
+                    "cover": [
+                        {
+                            "name": "Shades Curtain",
+                            "unique_id": "shades_curtain",
+                            "open_cover": [],
+                            "close_cover": [],
+                            "stop_cover": [],
+                        }
+                    ]
+                },
+                {
+                    "cover": [
+                        {
+                            "open_cover": {
+                                "target": {"entity_id": ["cover.shades_curtain"]},
+                                "action": "cover.close_cover",
+                            },
+                            "close_cover": {
+                                "target": {"entity_id": ["cover.shades_curtain"]},
+                                "action": "cover.open_cover",
+                            },
+                            "stop_cover": {
+                                "target": {"entity_id": ["cover.shades_curtain"]},
+                                "action": "cover.stop_cover",
+                            },
+                            "default_entity_id": "cover.shades_reversed",
+                            "icon": (
+                                "{% set s = states('cover.shades_curtain') %}\n"
+                                "{% if s == 'open' %}\n"
+                                "   mdi:curtains-closed\n"
+                                "{% else %}\n"
+                                "   mdi:curtains\n"
+                                "{% endif %}"
+                            ),
+                            "name": "Shades Reversed",
+                            "unique_id": "c0223bcb-32c6-430e-a2c1-3545f8031796",
+                            "state": (
+                                "{% set s = states('cover.shades_curtain') %}\n"
+                                "{% if s == 'open' %}\n  closed\n"
+                                "{% elif s == 'closed' %}\n  open\n"
+                                "{% elif s == 'opening' %}\n  closing\n"
+                                "{% elif s == 'closing' %}\n  opening\n"
+                                "{% else %}\n  unknown\n{% endif %}"
+                            ),
+                        }
+                    ]
+                },
+            ],
+        },
+    )
+    await hass.async_block_till_done()
+
+    for entity_id, expected in (
+        ("binary_sensor.foo", "on"),
+        ("sensor.foo", "bar"),
+        ("sensor.bar", "foo"),
+        ("cover.shades_curtain", "unknown"),
+        ("cover.shades_reversed", "unknown"),
+    ):
+        state = hass.states.get(entity_id)
+        assert state
+        assert state.state == expected

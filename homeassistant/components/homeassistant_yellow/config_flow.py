@@ -1,12 +1,11 @@
 """Config flow for the Home Assistant Yellow integration."""
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Protocol, final
 
+from universal_silabs_flasher.flasher import YellowFlasher
 import voluptuous as vol
 
 from homeassistant.components.hassio import (
@@ -25,7 +24,6 @@ from homeassistant.components.homeassistant_hardware.silabs_multiprotocol_addon 
 from homeassistant.components.homeassistant_hardware.util import (
     ApplicationType,
     FirmwareInfo,
-    ResetTarget,
     probe_silabs_firmware_info,
 )
 from homeassistant.config_entries import (
@@ -82,7 +80,8 @@ else:
 class YellowFirmwareMixin(ConfigEntryBaseFlow, FirmwareInstallFlowProtocol):
     """Mixin for Home Assistant Yellow firmware methods."""
 
-    BOOTLOADER_RESET_METHODS = [ResetTarget.YELLOW]
+    ZIGBEE_BAUDRATE = 115200
+    _flasher_cls = YellowFlasher
 
     async def async_step_install_zigbee_firmware(
         self, user_input: dict[str, Any] | None = None
@@ -146,7 +145,10 @@ class HomeAssistantYellowConfigFlow(
         assert self._device is not None
 
         # We do not actually use any portion of `BaseFirmwareConfigFlow` beyond this
-        self._probed_firmware_info = await probe_silabs_firmware_info(self._device)
+        self._probed_firmware_info = await probe_silabs_firmware_info(
+            self._device,
+            flasher_cls=self._flasher_cls,
+        )
 
         # Kick off ZHA hardware discovery automatically if Zigbee firmware is running
         if (
@@ -348,7 +350,7 @@ class HomeAssistantYellowOptionsFlowHandler(
 
         self._probed_firmware_info = FirmwareInfo(
             device=self._device,
-            firmware_type=ApplicationType(self.config_entry.data["firmware"]),
+            firmware_type=ApplicationType(self._config_entry.data["firmware"]),
             firmware_version=None,
             source="guess",
             owners=[],

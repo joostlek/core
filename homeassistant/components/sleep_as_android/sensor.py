@@ -1,7 +1,5 @@
 """Sensor platform for Sleep as Android integration."""
 
-from __future__ import annotations
-
 from datetime import datetime
 from enum import StrEnum
 
@@ -66,8 +64,6 @@ class SleepAsAndroidSensorEntity(SleepAsAndroidEntity, RestoreSensor):
         if webhook_id == self.webhook_id and data[ATTR_EVENT] in (
             "alarm_snooze_clicked",
             "alarm_snooze_canceled",
-            "alarm_alert_start",
-            "alarm_alert_dismiss",
             "alarm_skip_next",
             "show_skip_next_alarm",
             "alarm_rescheduled",

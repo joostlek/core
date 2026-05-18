@@ -1,19 +1,14 @@
 """Support for Comelit."""
 
 from abc import abstractmethod
+from collections.abc import Mapping
 from datetime import timedelta
-from typing import Any, TypeVar
+from typing import TypeVar, cast
 
-from aiocomelit.api import (
-    AlarmDataObject,
-    ComelitCommonApi,
-    ComeliteSerialBridgeApi,
-    ComelitSerialBridgeObject,
-    ComelitVedoApi,
-    ComelitVedoAreaObject,
-    ComelitVedoZoneObject,
-)
+from aiocomelit.api import ComelitCommonApi, ComeliteSerialBridgeApi, ComelitVedoApi
 from aiocomelit.const import (
+    ALARM_AREA,
+    ALARM_ZONE,
     BRIDGE,
     CLIMATE,
     COVER,
@@ -23,7 +18,12 @@ from aiocomelit.const import (
     SCENARIO,
     VEDO,
 )
-from aiocomelit.exceptions import CannotAuthenticate, CannotConnect, CannotRetrieveData
+from aiocomelit.exceptions import (
+    CannotAuthenticate,
+    CannotConnect,
+    CannotRetrieveData,
+    DeviceStorageFailureError,
+)
 from aiohttp import ClientSession
 
 from homeassistant.config_entries import ConfigEntry
@@ -32,14 +32,17 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import _LOGGER, DOMAIN, SCAN_INTERVAL
+from .const import _LOGGER, DOMAIN, SCAN_INTERVAL, ObjectClassType
 
 type ComelitConfigEntry = ConfigEntry[ComelitBaseCoordinator]
 
 
 T = TypeVar(
     "T",
-    bound=dict[str, dict[int, ComelitSerialBridgeObject]] | AlarmDataObject,
+    bound=dict[
+        str,
+        Mapping[int, ObjectClassType],
+    ],
 )
 
 
@@ -67,6 +70,7 @@ class ComelitBaseCoordinator(DataUpdateCoordinator[T]):
         )
         device_registry = dr.async_get(self.hass)
         device_registry.async_get_or_create(
+            configuration_url=self.api.base_url,
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, entry.entry_id)},
             model=device,
@@ -77,9 +81,7 @@ class ComelitBaseCoordinator(DataUpdateCoordinator[T]):
 
     def platform_device_info(
         self,
-        object_class: ComelitVedoZoneObject
-        | ComelitVedoAreaObject
-        | ComelitSerialBridgeObject,
+        object_class: ObjectClassType,
         object_type: str,
     ) -> dr.DeviceInfo:
         """Set platform device info."""
@@ -115,6 +117,11 @@ class ComelitBaseCoordinator(DataUpdateCoordinator[T]):
                 translation_domain=DOMAIN,
                 translation_key="cannot_authenticate",
             ) from err
+        except DeviceStorageFailureError as err:
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="device_storage_failure",
+            ) from err
 
     @abstractmethod
     async def _async_update_system_data(self) -> T:
@@ -122,8 +129,8 @@ class ComelitBaseCoordinator(DataUpdateCoordinator[T]):
 
     async def _async_remove_stale_devices(
         self,
-        previous_list: dict[int, Any],
-        current_list: dict[int, Any],
+        previous_list: Mapping[int, ObjectClassType],
+        current_list: Mapping[int, ObjectClassType],
         dev_type: str,
     ) -> None:
         """Remove stale devices."""
@@ -147,9 +154,7 @@ class ComelitBaseCoordinator(DataUpdateCoordinator[T]):
                     )
 
 
-class ComelitSerialBridge(
-    ComelitBaseCoordinator[dict[str, dict[int, ComelitSerialBridgeObject]]]
-):
+class ComelitSerialBridge(ComelitBaseCoordinator[T]):
     """Queries Comelit Serial Bridge."""
 
     _hw_version = "20003101"
@@ -162,17 +167,23 @@ class ComelitSerialBridge(
         host: str,
         port: int,
         pin: str,
+        vedo_pin: str | None,
         session: ClientSession,
     ) -> None:
         """Initialize the scanner."""
         self.api = ComeliteSerialBridgeApi(host, port, pin, session)
+        self.vedo_pin = vedo_pin
         super().__init__(hass, entry, BRIDGE, host)
 
     async def _async_update_system_data(
         self,
-    ) -> dict[str, dict[int, ComelitSerialBridgeObject]]:
+    ) -> T:
         """Specific method for updating data."""
-        data = await self.api.get_all_devices()
+        data: dict[
+            str,
+            Mapping[int, ObjectClassType],
+        ] = {}
+        data.update(await self.api.get_all_devices())
 
         if self.data:
             for dev_type in (CLIMATE, COVER, LIGHT, IRRIGATION, OTHER, SCENARIO):
@@ -180,10 +191,14 @@ class ComelitSerialBridge(
                     self.data[dev_type], data[dev_type], dev_type
                 )
 
-        return data
+        # Get VEDO alarm data if vedo_pin is configured
+        if self.vedo_pin:
+            data.update(await self.api.get_all_areas_and_zones())
+
+        return cast(T, data)
 
 
-class ComelitVedoSystem(ComelitBaseCoordinator[AlarmDataObject]):
+class ComelitVedoSystem(ComelitBaseCoordinator[T]):
     """Queries Comelit VEDO system."""
 
     _hw_version = "VEDO IP"
@@ -200,20 +215,21 @@ class ComelitVedoSystem(ComelitBaseCoordinator[AlarmDataObject]):
     ) -> None:
         """Initialize the scanner."""
         self.api = ComelitVedoApi(host, port, pin, session)
+        self.vedo_pin = pin
         super().__init__(hass, entry, VEDO, host)
 
     async def _async_update_system_data(
         self,
-    ) -> AlarmDataObject:
+    ) -> T:
         """Specific method for updating data."""
         data = await self.api.get_all_areas_and_zones()
 
         if self.data:
-            for obj_type in ("alarm_areas", "alarm_zones"):
+            for obj_type in (ALARM_AREA, ALARM_ZONE):
                 await self._async_remove_stale_devices(
                     self.data[obj_type],
                     data[obj_type],
-                    "area" if obj_type == "alarm_areas" else "zone",
+                    "area" if obj_type == ALARM_AREA else "zone",
                 )
 
-        return data
+        return cast(T, data)

@@ -14,9 +14,9 @@ from voip_utils import CallInfo
 from homeassistant.components import assist_pipeline, assist_satellite, tts, voip
 from homeassistant.components.assist_satellite import AssistSatelliteEntity
 
-# pylint: disable-next=hass-component-root-import
+# pylint: disable-next=home-assistant-component-root-import
 from homeassistant.components.assist_satellite.entity import AssistSatelliteState
-from homeassistant.components.voip import DOMAIN, HassVoipDatagramProtocol
+from homeassistant.components.voip import HassVoipDatagramProtocol
 from homeassistant.components.voip.assist_satellite import Tones, VoipAssistSatellite
 from homeassistant.components.voip.devices import VoIPDevice, VoIPDevices
 from homeassistant.components.voip.voip import PreRecordMessageProtocol, make_protocol
@@ -27,6 +27,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.setup import async_setup_component
 
+from tests.common import MockConfigEntry
 from tests.components.tts.common import MockResultStream
 
 _ONE_SECOND = 16000 * 2  # 16Khz 16-bit
@@ -115,7 +116,8 @@ async def test_calls_not_allowed(
 
         # Should be problem.pcm from components/voip
         played_audio_bytes = audio_bytes
-        done.set()
+        # Use call_soon_threadsafe because send_audio runs in an executor thread
+        hass.loop.call_soon_threadsafe(done.set)
 
     protocol.transport = Mock()
     protocol.loop_delay = 0
@@ -827,6 +829,7 @@ async def test_pipeline_error(
 @pytest.mark.usefixtures("socket_enabled")
 async def test_announce(
     hass: HomeAssistant,
+    config_entry: MockConfigEntry,
     voip_devices: VoIPDevices,
     voip_device: VoIPDevice,
 ) -> None:
@@ -863,7 +866,7 @@ async def test_announce(
     )
 
     # Protocol has already been mocked, but "outgoing_call" is not async
-    mock_protocol: AsyncMock = hass.data[DOMAIN].protocol
+    mock_protocol: AsyncMock = config_entry.runtime_data.domain_data.protocol
     mock_protocol.outgoing_call = Mock()
 
     with (
@@ -895,6 +898,7 @@ async def test_announce(
 @pytest.mark.usefixtures("socket_enabled")
 async def test_voip_id_is_ip_address(
     hass: HomeAssistant,
+    config_entry: MockConfigEntry,
     voip_devices: VoIPDevices,
     voip_device: VoIPDevice,
 ) -> None:
@@ -918,7 +922,7 @@ async def test_voip_id_is_ip_address(
     )
 
     # Protocol has already been mocked, but "outgoing_call" is not async
-    mock_protocol: AsyncMock = hass.data[DOMAIN].protocol
+    mock_protocol: AsyncMock = config_entry.runtime_data.domain_data.protocol
     mock_protocol.outgoing_call = Mock()
 
     with (
@@ -955,6 +959,7 @@ async def test_voip_id_is_ip_address(
 @pytest.mark.usefixtures("socket_enabled")
 async def test_announce_timeout(
     hass: HomeAssistant,
+    config_entry: MockConfigEntry,
     voip_devices: VoIPDevices,
     voip_device: VoIPDevice,
 ) -> None:
@@ -978,7 +983,7 @@ async def test_announce_timeout(
     )
 
     # Protocol has already been mocked, but some methods are not async
-    mock_protocol: AsyncMock = hass.data[DOMAIN].protocol
+    mock_protocol: AsyncMock = config_entry.runtime_data.domain_data.protocol
     mock_protocol.outgoing_call = Mock()
     mock_protocol.cancel_call = Mock()
 
@@ -997,6 +1002,7 @@ async def test_announce_timeout(
 @pytest.mark.usefixtures("socket_enabled")
 async def test_start_conversation(
     hass: HomeAssistant,
+    config_entry: MockConfigEntry,
     voip_devices: VoIPDevices,
     voip_device: VoIPDevice,
 ) -> None:
@@ -1020,7 +1026,7 @@ async def test_start_conversation(
     )
 
     # Protocol has already been mocked, but "outgoing_call" is not async
-    mock_protocol: AsyncMock = hass.data[DOMAIN].protocol
+    mock_protocol: AsyncMock = config_entry.runtime_data.domain_data.protocol
     mock_protocol.outgoing_call = Mock()
 
     tts_sent = asyncio.Event()
@@ -1105,6 +1111,7 @@ async def test_start_conversation(
 @pytest.mark.usefixtures("socket_enabled")
 async def test_start_conversation_user_doesnt_pick_up(
     hass: HomeAssistant,
+    config_entry: MockConfigEntry,
     voip_devices: VoIPDevices,
     voip_device: VoIPDevice,
 ) -> None:
@@ -1119,8 +1126,9 @@ async def test_start_conversation_user_doesnt_pick_up(
         & assist_satellite.AssistSatelliteEntityFeature.START_CONVERSATION
     )
 
-    # Protocol has already been mocked, but "outgoing_call" and "cancel_call" are not async
-    mock_protocol: AsyncMock = hass.data[DOMAIN].protocol
+    # Protocol has already been mocked, but "outgoing_call" and
+    # "cancel_call" are not async
+    mock_protocol: AsyncMock = config_entry.runtime_data.domain_data.protocol
     mock_protocol.outgoing_call = Mock()
     mock_protocol.cancel_call = Mock()
 
