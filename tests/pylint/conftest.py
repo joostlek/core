@@ -13,6 +13,9 @@ from pylint_home_assistant.checkers.config_flow.unique_id_no_ip import (
     HassEnforceConfigEntryUniqueIdNoIpChecker,
 )
 from pylint_home_assistant.checkers.decorator import HassDecoratorChecker
+from pylint_home_assistant.checkers.extended_config_entry import (
+    HassEnforceExtendedConfigEntryChecker,
+)
 from pylint_home_assistant.checkers.greek_micro_char import (
     HassEnforceGreekMicroCharChecker,
 )
@@ -121,6 +124,17 @@ def enforce_runtime_data_checker_fixture(linter: UnittestLinter) -> BaseChecker:
     enforce_runtime_data_checker = HassEnforceRuntimeDataChecker(linter)
     enforce_runtime_data_checker.module = "homeassistant.components.pylint_test"
     return enforce_runtime_data_checker
+
+
+@pytest.fixture(name="enforce_extended_config_entry_checker")
+def enforce_extended_config_entry_checker_fixture(
+    linter: UnittestLinter,
+) -> BaseChecker:
+    """Fixture to provide an extended ConfigEntry checker."""
+    clear_caches()
+    checker = HassEnforceExtendedConfigEntryChecker(linter)
+    checker.module = "homeassistant.components.pylint_test"
+    return checker
 
 
 @pytest.fixture(name="enforce_greek_micro_char_checker")

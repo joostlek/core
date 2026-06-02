@@ -3,6 +3,7 @@
 import contextlib
 import json
 from pathlib import Path
+import re
 
 from astroid import nodes
 
@@ -12,12 +13,18 @@ from pylint_home_assistant.const import IntegrationType
 # same manifest is read at most once per pylint run.
 _manifest_cache: dict[str, dict | None] = {}
 _has_config_flow_cache: dict[str, bool] = {}
+_extended_config_entry_cache: dict[str, frozenset[str]] = {}
+
+_EXTENDED_CONFIG_ENTRY_RE: re.Pattern[str] = re.compile(
+    r"^\s*type\s+(\w+)\s*=\s*ConfigEntry\s*\[", re.MULTILINE
+)
 
 
 def clear_caches() -> None:
     """Clear all integration metadata caches (used by tests)."""
     _manifest_cache.clear()
     _has_config_flow_cache.clear()
+    _extended_config_entry_cache.clear()
 
 
 def get_integration_dir(module: nodes.Module) -> Path | None:
@@ -99,3 +106,31 @@ def is_helper_integration(integration: str, module: nodes.Module) -> bool:
     if manifest is None:
         return False
     return manifest.get("integration_type") == IntegrationType.HELPER
+
+
+def get_extended_config_entry_aliases(
+    integration: str, module: nodes.Module
+) -> frozenset[str]:
+    """Return the set of extended ``ConfigEntry`` type alias names.
+
+    Looks for top-level declarations of the form
+    ``type FooConfigEntry = ConfigEntry[...]`` in any ``.py`` file under the
+    integration directory.  Results are cached per integration domain.
+
+    Returns an empty set when no aliases are declared or the integration
+    directory cannot be resolved.
+    """
+    if integration in _extended_config_entry_cache:
+        return _extended_config_entry_cache[integration]
+
+    aliases: set[str] = set()
+    integration_dir = get_integration_dir(module)
+    if integration_dir is not None:
+        for path in integration_dir.rglob("*.py"):
+            with contextlib.suppress(OSError, UnicodeDecodeError):
+                content = path.read_text(encoding="utf-8")
+                aliases.update(_EXTENDED_CONFIG_ENTRY_RE.findall(content))
+
+    result = frozenset(aliases)
+    _extended_config_entry_cache[integration] = result
+    return result
