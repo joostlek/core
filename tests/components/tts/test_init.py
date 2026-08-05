@@ -2007,7 +2007,7 @@ async def test_result_stream_message_set_idempotent(
 async def test_tts_cache() -> None:
     """Test TTSCache."""
 
-    async def data_gen(queue: asyncio.Queue[bytes | None | Exception]):
+    async def data_gen(queue: asyncio.Queue[bytes | Exception | None]):
         while chunk := await queue.get():
             if isinstance(chunk, Exception):
                 raise chunk
@@ -2136,6 +2136,10 @@ async def test_stream_override(
         wav_file.seek(0)
 
         stream.async_override_result(wav_file.name)
+
+        # An override without conversion is available directly on disk.
+        assert stream.async_get_media_path() == Path(wav_file.name)
+
         result_data = b"".join([chunk async for chunk in stream.async_stream_result()])
 
     # Verify the result
@@ -2175,6 +2179,11 @@ async def test_stream_override_with_conversion(
 
         wav_file.seek(0)
         stream.async_override_result(wav_file.name)
+
+        # An override that needs conversion no longer matches the file on disk,
+        # so no path is exposed.
+        assert stream.async_get_media_path() is None
+
         result_data = b"".join([chunk async for chunk in stream.async_stream_result()])
 
     # Verify the result has the preferred format
