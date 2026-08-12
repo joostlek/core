@@ -39,7 +39,7 @@ CONFIG_FLOW = "config_flow"
 OPTIONS_FLOW = "options_flow"
 
 
-class BaseCrownstoneFlowHandler(ConfigEntryBaseFlow):
+class BaseCrownstoneFlow(ConfigEntryBaseFlow):
     """Represent the base flow for Crownstone."""
 
     cloud: CrownstoneCloud
@@ -128,7 +128,7 @@ class BaseCrownstoneFlowHandler(ConfigEntryBaseFlow):
         return self.create_entry_callback()
 
 
-class CrownstoneConfigFlowHandler(BaseCrownstoneFlowHandler, ConfigFlow, domain=DOMAIN):
+class CrownstoneConfigFlowHandler(BaseCrownstoneFlow, ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Crownstone."""
 
     VERSION = 1
@@ -138,9 +138,9 @@ class CrownstoneConfigFlowHandler(BaseCrownstoneFlowHandler, ConfigFlow, domain=
     @override
     def async_get_options_flow(
         config_entry: CrownstoneConfigEntry,
-    ) -> CrownstoneOptionsFlowHandler:
+    ) -> CrownstoneOptionsFlow:
         """Return the Crownstone options."""
-        return CrownstoneOptionsFlowHandler(config_entry)
+        return CrownstoneOptionsFlow(config_entry)
 
     def __init__(self) -> None:
         """Initialize the flow."""
@@ -205,7 +205,7 @@ class CrownstoneConfigFlowHandler(BaseCrownstoneFlowHandler, ConfigFlow, domain=
         )
 
 
-class CrownstoneOptionsFlowHandler(BaseCrownstoneFlowHandler, OptionsFlow):
+class CrownstoneOptionsFlow(BaseCrownstoneFlow, OptionsFlow):
     """Handle Crownstone options."""
 
     config_entry: CrownstoneConfigEntry
