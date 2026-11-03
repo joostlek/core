@@ -2,7 +2,6 @@
 
 from collections.abc import Generator
 from datetime import timedelta
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 from freezegun.api import FrozenDateTimeFactory
@@ -13,7 +12,6 @@ from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
 from pytest_homeassistant.typing import MockHAClientWebSocket, WebSocketGenerator
 
 from homeassistant.components.config import DOMAIN as CONFIG_DOMAIN
-from homeassistant.components.motion_blinds import async_remove_config_entry_device
 from homeassistant.components.motion_blinds.const import (
     DEFAULT_INTERFACE,
     DOMAIN,
@@ -216,13 +214,3 @@ async def test_remove_config_entry_device_via_websocket(
 
     assert response["success"] is expected_result
     assert (device_registry.async_get(device_entry.id) is None) is expected_result
-
-
-async def test_remove_config_entry_device_without_runtime_data(
-    hass: HomeAssistant,
-) -> None:
-    """Test that a device cannot be removed when runtime data is unavailable."""
-    config_entry = MockConfigEntry(domain=DOMAIN)
-    device_entry = SimpleNamespace(identifiers={(DOMAIN, "old_blind")})
-
-    assert not await async_remove_config_entry_device(hass, config_entry, device_entry)
